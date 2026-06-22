@@ -705,7 +705,9 @@ export default function ZOSDesktop() {
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 min-h-0 relative">
+          <div className="flex-1 min-h-0 relative flex">
+            {/* Main Panel */}
+            <div className="flex-1 min-h-0 relative">
             {/* Terminal Tab */}
             {activeTab === 'terminal' && (
               <div className="absolute inset-0 flex flex-col">
@@ -1083,6 +1085,48 @@ export default function ZOSDesktop() {
                 </div>
                 <div className="mt-3 text-[10px] text-gray-500">
                   💡 أنشئ قاعدة بيانات محلية بـ <span className="text-cyan-400">zdb create mydb</span> أو ثبّت PostgreSQL بـ <span className="text-cyan-400">zpkg install postgresql</span>.
+                </div>
+              </div>
+            )}
+            </div>{/* End Main Panel */}
+
+            {/* Quick Actions Sidebar - Only show on terminal tab */}
+            {activeTab === 'terminal' && (
+              <div className="hidden lg:flex w-52 shrink-0 flex-col border-l border-[#1a2744] bg-[#0d1321] overflow-y-auto p-2 gap-1.5">
+                <div className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 px-1">أوامر سريعة</div>
+                {[
+                  { label: 'System Info', cmd: 'zsysinfo', icon: '🖥️' },
+                  { label: 'Security Scan', cmd: 'zsec scan', icon: '🛡️' },
+                  { label: 'Harden System', cmd: 'zsec harden', icon: '🔒' },
+                  { label: 'AI Diagnose', cmd: 'zai diagnose', icon: '🤖' },
+                  { label: 'Performance', cmd: 'zperf', icon: '⚡' },
+                  { label: 'Network', cmd: 'znet status', icon: '🌐' },
+                  { label: 'Firewall', cmd: 'zfirewall status', icon: '🔥' },
+                  { label: 'Processes', cmd: 'zps', icon: '📊' },
+                  { label: 'Benchmark', cmd: 'zbenchmark', icon: '🏆' },
+                  { label: 'Services', cmd: 'zservice list', icon: '⚙️' },
+                  { label: 'Packages', cmd: 'zpkg list', icon: '📦' },
+                  { label: 'Backup', cmd: 'zbackup list', icon: '💾' },
+                  { label: 'ZFS Status', cmd: 'zfs list', icon: '💿' },
+                  { label: 'System Log', cmd: 'zlog', icon: '📋' },
+                  { label: 'Update System', cmd: 'zupdate', icon: '🔄' },
+                  { label: 'Neofetch', cmd: 'neofetch', icon: '🎨' },
+                ].map((action) => (
+                  <button
+                    key={action.cmd}
+                    className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-gray-400 hover:text-cyan-400 hover:bg-[#1a2744]/50 rounded transition-all text-right"
+                    dir="rtl"
+                    onClick={() => {
+                      setCurrentInput(action.cmd)
+                      inputRef.current?.focus()
+                    }}
+                  >
+                    <span className="text-xs">{action.icon}</span>
+                    <span>{action.label}</span>
+                  </button>
+                ))}
+                <div className="mt-2 px-1">
+                  <div className="text-[9px] text-gray-600">💡 انقر لتعبة الأمر في الطرفية ثم اضغط Enter</div>
                 </div>
               </div>
             )}
