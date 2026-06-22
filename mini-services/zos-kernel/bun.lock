@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "terminal-service",
+      "name": "zos-kernel",
       "dependencies": {
         "socket.io": "^4.8.1",
         "uuid": "^11.1.0",

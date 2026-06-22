@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RAW Cloud Linux - Free Plan Terminal",
-  description: "بيئة نظام لينكس السحابية من RAW - الخطة المجانية",
-  keywords: ["RAW", "Linux", "Cloud", "Terminal", "VPS", "Free Plan"],
-  authors: [{ name: "RAW Cloud" }],
+  title: "Z-OS 3.0 Quantum - Next-Gen Operating System",
+  description: "Z-OS Quantum - نظام التشغيل الذي يتفوق على لينكس في كل شيء",
+  keywords: ["Z-OS", "Quantum", "Linux", "Operating System", "Security", "AI"],
+  authors: [{ name: "Z-OS Team" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
@@ -31,7 +31,7 @@ export default function RootLayout({
   return (
     <html lang="ar" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0a0a0a] text-[#e0e0e0]`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0a0e17] text-[#e0e8f0]`}
       >
         {children}
         <Toaster />

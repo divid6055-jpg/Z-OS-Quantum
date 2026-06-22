@@ -1,5 +1,5 @@
 {
-  "name": "terminal-service",
+  "name": "zos-kernel",
   "version": "1.0.0",
   "private": true,
   "scripts": {
