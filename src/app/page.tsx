@@ -682,9 +682,12 @@ export default function ZOSDesktop() {
             {[
               { id: 'terminal', label: 'Terminal', icon: TerminalIcon },
               { id: 'files', label: 'Files', icon: FolderOpen },
+              { id: 'monitor', label: 'Monitor', icon: Activity },
               { id: 'network', label: 'Network', icon: Globe },
               { id: 'security', label: 'Security', icon: Shield },
               { id: 'packages', label: 'Packages', icon: Package },
+              { id: 'containers', label: 'Containers', icon: Server },
+              { id: 'databases', label: 'DB', icon: HardDrive },
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -920,9 +923,19 @@ export default function ZOSDesktop() {
                     { pkg: 'z-ai-detect', ver: '3.0.1', desc: 'AI Threat Detection', installed: true },
                     { pkg: 'z-quantum-crypto', ver: '2.0.0', desc: 'Quantum-Resistant Crypto', installed: true },
                     { pkg: 'nginx', ver: '1.27.0', desc: 'Web Server', installed: true },
+                    { pkg: 'z-monitor', ver: '2.5.0', desc: 'System Monitor', installed: true },
+                    { pkg: 'z-audit', ver: '4.0.0', desc: 'Security Audit Framework', installed: true },
+                    { pkg: 'z-desktop', ver: '3.0.0', desc: 'Quantum Desktop', installed: true },
+                    { pkg: 'python3', ver: '3.13.0', desc: 'Python Language', installed: true },
+                    { pkg: 'nodejs', ver: '22.0.0', desc: 'Node.js Runtime', installed: true },
+                    { pkg: 'gcc', ver: '14.1.0', desc: 'GNU Compiler', installed: true },
+                    { pkg: 'git', ver: '2.45.0', desc: 'Version Control', installed: true },
                     { pkg: 'docker', ver: '26.1.0', desc: 'Container Runtime', installed: false },
                     { pkg: 'z-vpn', ver: '1.2.0', desc: 'WireGuard VPN', installed: false },
                     { pkg: 'postgresql', ver: '17.0', desc: 'Database Server', installed: false },
+                    { pkg: 'redis', ver: '8.0', desc: 'In-Memory Data Store', installed: false },
+                    { pkg: 'rust', ver: '1.78.0', desc: 'Rust Language', installed: false },
+                    { pkg: 'go', ver: '1.22.0', desc: 'Go Language', installed: false },
                   ].map((p, i) => (
                     <div key={i} className="flex items-center justify-between p-2 bg-[#0a0e17] rounded border border-[#1a2744]">
                       <div className="flex items-center gap-2">
@@ -938,6 +951,138 @@ export default function ZOSDesktop() {
                 </div>
                 <div className="mt-3 text-[10px] text-gray-500">
                   💡 استخدم <span className="text-cyan-400">zpkg list</span>, <span className="text-cyan-400">zpkg install &lt;pkg&gt;</span>, <span className="text-cyan-400">zpkg update</span> في الطرفية.
+                </div>
+              </div>
+            )}
+
+            {/* Monitor Tab */}
+            {activeTab === 'monitor' && (
+              <div className="absolute inset-0 mx-2 sm:mx-4 mt-2 mb-4 bg-[#0d1321] rounded-xl border border-[#1a2744] overflow-auto p-4">
+                <h3 className="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  مراقبة الأداء اللحظي
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                  <div className="p-3 bg-[#0a0e17] rounded-lg border border-[#1a2744] text-center">
+                    <Cpu className="w-5 h-5 text-cyan-400 mx-auto mb-1" />
+                    <div className="text-lg font-bold text-white">{metrics?.cpuUsage.toFixed(1) ?? '0'}%</div>
+                    <div className="text-[9px] text-gray-500">CPU Usage</div>
+                    <div className="mt-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all" style={{width: `${metrics?.cpuUsage ?? 0}%`}} />
+                    </div>
+                  </div>
+                  <div className="p-3 bg-[#0a0e17] rounded-lg border border-[#1a2744] text-center">
+                    <MemoryStick className="w-5 h-5 text-purple-400 mx-auto mb-1" />
+                    <div className="text-lg font-bold text-white">{metrics ? (metrics.memUsed/1024).toFixed(0) : '0'}G</div>
+                    <div className="text-[9px] text-gray-500">RAM Used / 16G</div>
+                    <div className="mt-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all" style={{width: `${metrics ? (metrics.memUsed/metrics.memTotal*100) : 0}%`}} />
+                    </div>
+                  </div>
+                  <div className="p-3 bg-[#0a0e17] rounded-lg border border-[#1a2744] text-center">
+                    <HardDrive className="w-5 h-5 text-blue-400 mx-auto mb-1" />
+                    <div className="text-lg font-bold text-white">{metrics?.diskUsed ?? 0}G</div>
+                    <div className="text-[9px] text-gray-500">Disk / {metrics?.diskTotal ?? 64}G</div>
+                    <div className="mt-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full transition-all" style={{width: `${metrics ? (metrics.diskUsed/metrics.diskTotal*100) : 0}%`}} />
+                    </div>
+                  </div>
+                  <div className="p-3 bg-[#0a0e17] rounded-lg border border-[#1a2744] text-center">
+                    <Shield className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
+                    <div className="text-lg font-bold text-emerald-400">{metrics?.threats === 0 ? 'Safe' : metrics?.threats ?? 0}</div>
+                    <div className="text-[9px] text-gray-500">Security Status</div>
+                    <div className="mt-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{width: '100%'}} />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 bg-[#0a0e17] rounded border border-[#1a2744]">
+                    <div className="text-[10px] text-cyan-400 uppercase tracking-wider mb-1">Services</div>
+                    <div className="space-y-0.5 text-[10px]">
+                      <div className="flex justify-between text-emerald-400"><span>z-kernel-guard</span><span>Active</span></div>
+                      <div className="flex justify-between text-emerald-400"><span>z-firewall</span><span>Active</span></div>
+                      <div className="flex justify-between text-emerald-400"><span>z-ai-detect</span><span>Active</span></div>
+                      <div className="flex justify-between text-emerald-400"><span>z-quantum-crypto</span><span>Active</span></div>
+                      <div className="flex justify-between text-emerald-400"><span>nginx</span><span>Active</span></div>
+                    </div>
+                  </div>
+                  <div className="p-2 bg-[#0a0e17] rounded border border-[#1a2744]">
+                    <div className="text-[10px] text-purple-400 uppercase tracking-wider mb-1">Scheduler</div>
+                    <div className="space-y-0.5 text-[10px] text-gray-400">
+                      <div>Context switches: 12,450/s</div>
+                      <div>Avg latency: 0.8μs</div>
+                      <div>Processes: {metrics?.processes ?? 142}</div>
+                      <div>Threads: {metrics?.threads ?? 547}</div>
+                      <div>Load: {metrics?.loadAvg.join(', ') ?? '0.08, 0.03, 0.01'}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 text-[10px] text-gray-500">
+                  💡 استخدم <span className="text-cyan-400">zperf</span> لأداء مفصل، <span className="text-cyan-400">zps</span> للعمليات، <span className="text-cyan-400">zservice list</span> للخدمات.
+                </div>
+              </div>
+            )}
+
+            {/* Containers Tab */}
+            {activeTab === 'containers' && (
+              <div className="absolute inset-0 mx-2 sm:mx-4 mt-2 mb-4 bg-[#0d1321] rounded-xl border border-[#1a2744] overflow-auto p-4">
+                <h3 className="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
+                  <Server className="w-4 h-4" />
+                  إدارة الحاويات Z-Container
+                </h3>
+                <div className="space-y-2 text-xs font-mono">
+                  {[
+                    { id: 'a1b2c3', image: 'z-os/nginx:latest', status: 'Up 2h', port: '80', name: 'web-server' },
+                    { id: 'f6e5d4', image: 'z-os/redis:latest', status: 'Up 2h', port: '6379', name: 'cache' },
+                    { id: '1a2b3c', image: 'z-os/node:22', status: 'Up 45m', port: '3000', name: 'app-server' },
+                  ].map((c, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 bg-[#0a0e17] rounded border border-[#1a2744]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-emerald-400">●</span>
+                        <span className="text-white">{c.id}</span>
+                        <span className="text-gray-400">{c.image}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-gray-400">
+                        <span>{c.status}</span>
+                        <span className="text-blue-400">:{c.port}</span>
+                        <span className="text-white">{c.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 text-[10px] text-gray-500">
+                  💡 استخدم <span className="text-cyan-400">zdocker ps</span>, <span className="text-cyan-400">zdocker images</span>, <span className="text-cyan-400">zdocker compose</span> في الطرفية.
+                </div>
+              </div>
+            )}
+
+            {/* Databases Tab */}
+            {activeTab === 'databases' && (
+              <div className="absolute inset-0 mx-2 sm:mx-4 mt-2 mb-4 bg-[#0d1321] rounded-xl border border-[#1a2744] overflow-auto p-4">
+                <h3 className="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
+                  <HardDrive className="w-4 h-4" />
+                  إدارة قواعد البيانات Z-DB
+                </h3>
+                <div className="space-y-2 text-xs">
+                  <div className="p-3 bg-[#0a0e17] rounded-lg border border-[#1a2744]">
+                    <div className="text-[10px] text-cyan-400 uppercase tracking-wider mb-2">أوامر قاعدة البيانات</div>
+                    <div className="space-y-1 text-[10px] text-gray-400">
+                      <div><span className="text-emerald-400">zdb create</span> mydb — إنشاء قاعدة بيانات جديدة</div>
+                      <div><span className="text-emerald-400">zdb tables</span> — عرض جميع قواعد البيانات</div>
+                      <div><span className="text-emerald-400">zdb query</span> &quot;SELECT * FROM users&quot; — تنفيذ استعلام</div>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-[#0a0e17] rounded-lg border border-[#1a2744]">
+                    <div className="text-[10px] text-purple-400 uppercase tracking-wider mb-2">حاويات قواعد البيانات المتاحة</div>
+                    <div className="space-y-1 text-[10px] text-gray-400">
+                      <div className="flex items-center gap-2"><span className="text-yellow-400">○</span> PostgreSQL 17 — <span className="text-cyan-400">zpkg install postgresql</span></div>
+                      <div className="flex items-center gap-2"><span className="text-yellow-400">○</span> Redis 8 — <span className="text-cyan-400">zpkg install redis</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 text-[10px] text-gray-500">
+                  💡 أنشئ قاعدة بيانات محلية بـ <span className="text-cyan-400">zdb create mydb</span> أو ثبّت PostgreSQL بـ <span className="text-cyan-400">zpkg install postgresql</span>.
                 </div>
               </div>
             )}
