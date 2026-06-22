@@ -508,6 +508,12 @@ function getParentAndName(path: string): { parent: FileSystemNode | null, name: 
 // SYSTEM METRICS (Dynamic)
 // ═══════════════════════════════════════════
 
+function formatUptime(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  return `${h}h ${m}m`
+}
+
 function getSystemMetrics() {
   const uptime = Math.floor((Date.now() - startTime) / 1000)
   const cpuUsage = 5 + Math.random() * 20
@@ -2255,6 +2261,222 @@ sshd       11   root   3u   IPv4   12892    0t0        TCP *:22` }
       return { output: `\x1b[31mlsof: ${args[0]} (simplified mode - use ztrace for detailed tracing)\x1b[0m` }
     }
 
+    // ═══════════════════════════════
+    // AI ASSISTANT
+    // ═══════════════════════════════
+
+    case 'zai': {
+      if (args.length === 0 || args[0] === 'help') {
+        return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
+\x1b[1;36m║              \x1b[1;33mZ-AI Assistant - Intelligent System Helper\x1b[1;36m                ║\x1b[0m
+\x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[33mzai ask <question>\x1b[0m    Ask AI about system tasks          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[33mzai fix <issue>\x1b[0m      Get AI-powered fix suggestions     \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[33mzai optimize\x1b[0m         Get performance optimization tips  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[33mzai security\x1b[0m        Get security recommendations       \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[33mzai diagnose\x1b[0m        Run AI system diagnostics          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[33mzai learn\x1b[0m           Show AI learning capabilities       \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
+      }
+      if (args[0] === 'ask' && args.length > 1) {
+        const question = args.slice(1).join(' ')
+        return { output: `\x1b[1;36m[Z-AI] Analyzing your question...\x1b[0m
+
+Question: "${question}"
+
+\x1b[1;33mAI Analysis:\x1b[0m
+Based on the current system state, I recommend checking the following:
+1. Run \x1b[36mzsysinfo\x1b[0m to get full system overview
+2. Run \x1b[36mzsec scan\x1b[0m to check for security issues
+3. Run \x1b[36mzperf\x1b[0m to monitor performance metrics
+
+The Z-AI engine continuously learns from your system behavior
+and can provide personalized recommendations.
+
+\x1b[32mConfidence: 94.7% | Model: z-llm-7b-quantum\x1b[0m` }
+      }
+      if (args[0] === 'fix' && args.length > 1) {
+        const issue = args.slice(1).join(' ')
+        return { output: `\x1b[1;36m[Z-AI] Diagnosing issue: ${issue}\x1b[0m
+
+\x1b[1;33mRoot Cause Analysis:\x1b[0m
+The AI has identified potential causes and solutions:
+
+\x1b[32mSolution 1 (Recommended):\x1b[0m
+  Run: zsec harden
+  This applies security hardening and patches known vulnerabilities.
+
+\x1b[32mSolution 2:\x1b[0m
+  Run: zupdate
+  This updates all packages to their latest secure versions.
+
+\x1b[32mSolution 3:\x1b[0m
+  Run: zservice restart <service-name>
+  Restart the affected service with AI-optimized scheduling.
+
+\x1b[33mAI Confidence: 97.2% | Auto-fix available: zai autofix\x1b[0m` }
+      }
+      if (args[0] === 'optimize') {
+        return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
+\x1b[1;36m║              \x1b[1;33mZ-AI Performance Optimization Report\x1b[1;36m                      ║\x1b[0m
+\x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[1;32m1. Memory Optimization\x1b[0m                                          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Current: 8.2 GB / 16 GB (51%)                             \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Suggestion: Enable memory deduplication (saves 30%)          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Command: sysctl -w vm.z_dedup=1                             \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[1;32m2. CPU Optimization\x1b[0m                                             \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Current: AI Scheduler active (40% faster than CFS)            \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Suggestion: Enable real-time priority for critical services    \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Command: sysctl -w kernel.z_rt_priority=1                    \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[1;32m3. I/O Optimization\x1b[0m                                              \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Current: ZFS with zstd-19 compression                       \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Suggestion: Enable adaptive prefetch for sequential reads      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Command: zfs set prefetch=adaptive zroot                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[1;32m4. Network Optimization\x1b[0m                                          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Current: 10 Gbps with TCP optimization                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Suggestion: Enable BBR congestion control algorithm            \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m     Command: sysctl -w net.ipv4.tcp_congestion_control=bbr          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[32mOverall Score: 92/100 (Excellent)\x1b[0m                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
+      }
+      if (args[0] === 'security') {
+        return { output: `\x1b[1;36m[Z-AI] Security Analysis\x1b[0m
+
+\x1b[1;33mCurrent Security Posture: PARANOID (Level 3)\x1b[0m
+
+\x1b[32mStrengths:\x1b[0m
+  + Zero-trust architecture at kernel level
+  + AI-powered threat detection (99.97% accuracy)
+  + Quantum-resistant encryption (AES-256-GCM + Kyber-1024)
+  + Full ASLR + Stack Protector + FORTIFY_SOURCE=2
+  + SECCOMP strict mode + AppArmor profiles
+
+\x1b[33mRecommendations:\x1b[0m
+  ! Patch ZVE-2026-002 (ZFS Buffer Overflow) - run zupdate
+  ! Patch ZVE-2026-004 (Firewall Rule Bypass) - run zupdate
+  ! Patch ZVE-2026-006 (Weak VPN Cipher) - run zpkg install z-vpn
+  ! Enable 2FA for root access - run zuser passwd root
+
+\x1b[32mSecurity Score: 98/100\x1b[0m` }
+      }
+      if (args[0] === 'diagnose') {
+        const m = getSystemMetrics()
+        return { output: `\x1b[1;36m[Z-AI] System Diagnostics\x1b[0m
+
+\x1b[33mRunning 15 diagnostic checks...\x1b[0m
+
+  [1/15]  Kernel integrity...... \x1b[32mPASS\x1b[0m (z-kernel-guard active)
+  [2/15]  Memory health......... \x1b[32mPASS\x1b[0m (${(m.memUsed/m.memTotal*100).toFixed(1)}% used)
+  [3/15]  CPU health............ \x1b[32mPASS\x1b[0m (${m.cpuUsage.toFixed(1)}% load)
+  [4/15]  Disk health........... \x1b[32mPASS\x1b[0m (ZFS scrub: 0 errors)
+  [5/15]  Firewall status....... \x1b[32mPASS\x1b[0m (247 rules active)
+  [6/15]  Network connectivity.. \x1b[32mPASS\x1b[0m (z0: up, 10 Gbps)
+  [7/15]  DNS resolution........ \x1b[32mPASS\x1b[0m (DoH + DNSSEC)
+  [8/15]  SSH service........... \x1b[32mPASS\x1b[0m (Ed25519 only)
+  [9/15]  Encryption............ \x1b[32mPASS\x1b[0m (AES-256-GCM + Kyber-1024)
+  [10/15] Process scheduler..... \x1b[32mPASS\x1b[0m (AI-optimized)
+  [11/15] Package signatures.... \x1b[32mPASS\x1b[0m (all verified)
+  [12/15] Service health........ \x1b[32mPASS\x1b[0m (15/15 running)
+  [13/15] Threat detection...... \x1b[32mPASS\x1b[0m (0 active threats)
+  [14/15] Backup status......... \x1b[32mPASS\x1b[0m (latest: today)
+  [15/15] AI model health....... \x1b[32mPASS\x1b[0m (z-threat-v3 loaded)
+
+\x1b[32mAll 15 checks passed. System is healthy.\x1b[0m` }
+      }
+      if (args[0] === 'learn') {
+        return { output: `\x1b[1;36m[Z-AI] Learning Capabilities\x1b[0m
+
+The Z-AI engine uses multiple learning models:
+
+  \x1b[33m1. Threat Detection Model (z-threat-v3)\x1b[0m
+     - Neural network: 7B parameters
+     - Training: 10M+ attack patterns
+     - Accuracy: 99.97%
+     - Update: Continuous learning from blocked threats
+
+  \x1b[33m2. Process Scheduling Model (z-sched-v2)\x1b[0m
+     - Reinforcement learning based
+     - Learns optimal scheduling from workload patterns
+     - 40% faster context switches than Linux CFS
+
+  \x1b[33m3. Anomaly Detection Model (z-anomaly-v1)\x1b[0m
+     - Unsupervised learning on system behavior
+     - Detects zero-day exploits in real-time
+     - Self-updating every 6 hours
+
+  \x1b[33m4. Filesystem Optimization Model (z-fs-opt-v1)\x1b[0m
+     - Predicts file access patterns
+     - Auto-tunes ZFS prefetch and caching
+     - 25% faster file access than default ZFS
+
+All models run locally with hardware-accelerated inference.
+No data leaves the system - privacy by design.` }
+      }
+      return { output: `\x1b[33mUsage: zai [ask|fix|optimize|security|diagnose|learn] [args]\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // SYSTEM TOOLS
+    // ═══════════════════════════════
+
+    case 'zauth': {
+      return { output: `\x1b[1;36mZ-Auth - Privilege Escalation\x1b[0m
+────────────────────────────────────────────────────────
+\x1b[33mMulti-factor authentication required:\x1b[0m
+  1. Password authentication
+  2. Ed25519 key verification
+  3. AI behavior analysis
+
+\x1b[32mZero-trust: Every privileged operation requires re-authentication.\x1b[0m` }
+    }
+
+    case 'zenv': {
+      return { output: `\x1b[1;36mZ-OS Environment Configuration\x1b[0m
+────────────────────────────────────────────────────────
+  Desktop:    Z-Desktop 3.0 Quantum
+  Shell:      zsh 5.9 (Z-OS enhanced)
+  Editor:     nano/vim (Z-Code available in browser)
+  Theme:      Quantum Dark (customizable)
+  Language:   en_US.UTF-8
+  Terminal:   xterm-256color
+
+\x1b[33mZ-OS Exclusive Features:\x1b[0m
+  + AI-powered tab completion
+  + Natural language command suggestions
+  + Auto-alias creation based on usage patterns
+  + Quantum-encrypted session management
+  + Self-healing command history` }
+    }
+
+    case 'zmotd': {
+      return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
+\x1b[1;36m║                                                                ║\x1b[0m
+\x1b[1;36m║   \x1b[1;33m  ███████╗███████╗ ██████╗ ██████╗ ███████╗\x1b[1;36m                    ║\x1b[0m
+\x1b[1;36m║   \x1b[1;33m  ╚══███╔╝██╔════╝██╔═══██╗██╔══██╗██╔════╝\x1b[1;36m                    ║\x1b[0m
+\x1b[1;36m║   \x1b[1;33m    ███╔╝ █████╗  ██║   ██║██████╔╝███████╗\x1b[1;36m                    ║\x1b[0m
+\x1b[1;36m║   \x1b[1;33m   ███╔╝  ██╔══╝  ██║   ██║██╔═══╝ ╚════██║\x1b[1;36m                    ║\x1b[0m
+\x1b[1;36m║   \x1b[1;33m  ███████╗███████╗╚██████╔╝██║     ███████║\x1b[1;36m                    ║\x1b[0m
+\x1b[1;36m║   \x1b[1;33m  ╚══════╝╚══════╝ ╚═════╝ ╚═╝     ╚══════╝\x1b[1;36m                    ║\x1b[0m
+\x1b[1;36m║                                                                ║\x1b[0m
+\x1b[1;36m║   \x1b[37mZ-OS 3.0 Quantum - The Operating System That Surpasses Linux\x1b[1;36m  ║\x1b[0m
+\x1b[1;36m║                                                                ║\x1b[0m
+\x1b[1;36m║   \x1b[36mKernel:\x1b[0m 6.2.0-z-quantum    \x1b[36mSecurity:\x1b[0m PARANOID                 ║\x1b[0m
+\x1b[1;36m║   \x1b[36mUptime:\x1b[0m ${formatUptime(getSystemMetrics().uptime).padEnd(18)}\x1b[36mAI Model:\x1b[0m z-threat-v3               ║\x1b[0m
+\x1b[1;36m║   \x1b[36mCPU:\x1b[0m    Z-Quantum 4C@4.2GHz  \x1b[36mRAM:\x1b[0m     16 GB DDR5                ║\x1b[0m
+\x1b[1;36m║   \x1b[36mDisk:\x1b[0m   64G NVMe (ZFS)      \x1b[36mNet:\x1b[0m     10 Gbps                    ║\x1b[0m
+\x1b[1;36m║                                                                ║\x1b[0m
+\x1b[1;36m║   Type \x1b[33m'help'\x1b[0m for commands or \x1b[33m'ztour'\x1b[0m for a guided tour            ║\x1b[0m
+\x1b[1;36m║                                                                ║\x1b[0m
+\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
+    }
+
     case 'sysctl': {
       if (args.length === 0) {
         return { output: `\x1b[1;36mZ-OS Sysctl Configuration\x1b[0m
@@ -2415,7 +2637,7 @@ io.on('connection', (socket) => {
       'zuser', 'useradd', 'usermod', 'zbackup', 'zperf', 'zfs',
       'zupdate', 'watch', 'sleep', 'wget', 'curl', 'ssh', 'scp',
       'kill', 'killall', 'reboot', 'shutdown', 'dmesg', 'strace', 'ztrace',
-      'lsof', 'sysctl',
+      'lsof', 'sysctl', 'zai', 'zauth', 'zenv', 'zmotd',
       ...Object.keys(session.aliases)]
     const input = data.input.trim().toLowerCase()
     const matches = allCmds.filter(c => c.startsWith(input))
