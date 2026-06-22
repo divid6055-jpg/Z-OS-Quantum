@@ -407,6 +407,13 @@ export default function ZOSDesktop() {
     return `${h}h ${m}m`
   }
 
+  const formatBytes = (bytes: number) => {
+    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`
+    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${bytes} B`
+  }
+
   const bootPhaseIcons = ['🔧', '🛡️', '🌐', '⚡']
   const bootPhaseNames = ['Kernel', 'Security', 'Network', 'System']
 
@@ -1142,15 +1149,19 @@ export default function ZOSDesktop() {
               <span className="text-gray-500">{username}@{hostname}</span>
               <span className="text-gray-600">|</span>
               <span className="text-gray-500">{cwd}</span>
+              <span className="text-gray-600">|</span>
+              <span className="text-gray-500">PID: {lines.length}</span>
             </div>
             <div className="flex items-center gap-3 text-gray-500">
               {metrics && (
                 <>
                   <span>CPU: <span className={metrics.cpuUsage > 80 ? 'text-red-400' : metrics.cpuUsage > 50 ? 'text-yellow-400' : 'text-emerald-400'}>{metrics.cpuUsage.toFixed(1)}%</span></span>
                   <span>MEM: <span className="text-purple-400">{(metrics.memUsed / 1024).toFixed(0)}G/{(metrics.memTotal / 1024).toFixed(0)}G</span></span>
+                  <span>NET: <span className="text-blue-400">RX {formatBytes(metrics.netRx)} TX {formatBytes(metrics.netTx)}</span></span>
+                  <span>LOAD: <span className="text-amber-400">{metrics.loadAvg.join(' ')}</span></span>
                 </>
               )}
-              <span className="text-cyan-400">Z-OS 3.0</span>
+              <span className="text-cyan-400">Z-OS 3.0 Quantum</span>
             </div>
           </div>
         </>
