@@ -1483,6 +1483,803 @@ SEE ALSO
 \x1b[32mZ-OS uses zero-trust architecture. Elevated privileges require multi-factor authentication.\x1b[0m
 \x1b[33mPlease use 'zauth' for privilege escalation.\x1b[0m` }
 
+    // ═══════════════════════════════
+    // PHASE 1: ADVANCED FILESYSTEM
+    // ═══════════════════════════════
+
+    case 'stat': {
+      if (!args[0]) return { output: '\x1b[31mstat: missing operand\x1b[0m' }
+      const filePath = resolvePath(args[0], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node) return { output: `\x1b[31mstat: cannot stat '${args[0]}': No such file or directory\x1b[0m` }
+      const ftype = node.type === 'directory' ? 'directory' : node.type === 'symlink' ? 'symbolic link' : node.type === 'device' ? 'device' : 'regular file'
+      return { output: `  File: ${args[0]}
+  Size: ${node.size}\tBlocks: ${Math.ceil(node.size/512)}\t${ftype}
+Access: (${node.permissions})\tUid: (${node.owner})\tGid: (${node.group})
+Access: ${node.modified.toISOString()}
+Modify: ${node.modified.toISOString()}
+Change: ${node.modified.toISOString()}
+${node.encrypted ? '\x1b[33m  Encrypted: AES-256-GCM\x1b[0m' : ''}
+${node.compressed ? '\x1b[36m  Compressed: zstd\x1b[0m' : ''}
+${node.hash ? `  Hash: sha256:${node.hash}` : ''}` }
+    }
+
+    case 'file': {
+      if (!args[0]) return { output: '\x1b[31mfile: missing operand\x1b[0m' }
+      const filePath = resolvePath(args[0], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node) return { output: `\x1b[31mfile: ${args[0]}: cannot open\x1b[0m` }
+      if (node.type === 'directory') return { output: `${args[0]}: directory` }
+      if (node.type === 'symlink') return { output: `${args[0]}: symbolic link to '${node.target}'` }
+      if (node.type === 'device') return { output: `${args[0]}: device` }
+      const content = node.content || ''
+      if (content.startsWith('#!/bin/')) return { output: `${args[0]}: script, ASCII text executable` }
+      if (content.startsWith('<!DOCTYPE') || content.startsWith('<html')) return { output: `${args[0]}: HTML document, UTF-8 Unicode text` }
+      if (content.startsWith('{') || content.startsWith('[')) return { output: `${args[0]}: JSON data, UTF-8 Unicode text` }
+      if (content.includes('function') || content.includes('const ') || content.includes('import ')) return { output: `${args[0]}: source code, UTF-8 Unicode text` }
+      return { output: `${args[0]}: ASCII text${node.encrypted ? ' (encrypted)' : ''}` }
+    }
+
+    case 'du': {
+      const targetPath = args[0] ? resolvePath(args[0], session.cwd) : session.cwd
+      const node = getNodeAtPath(targetPath)
+      if (!node) return { output: `\x1b[31mdu: cannot access '${args[0]}'\x1b[0m` }
+      function calcSize(n: FileSystemNode): number {
+        if (n.type === 'directory' && n.children) {
+          let total = n.size
+          for (const child of n.children.values()) total += calcSize(child)
+          return total
+        }
+        return n.size
+      }
+      const human = args.includes('-h') || args.includes('-sh')
+      const totalSize = calcSize(node)
+      const format = (s: number) => human ? s >= 1073741824 ? `${(s/1073741824).toFixed(1)}G` : s >= 1048576 ? `${(s/1048576).toFixed(1)}M` : s >= 1024 ? `${(s/1024).toFixed(1)}K` : `${s}` : `${s}`
+      return { output: `${format(totalSize)}\t${targetPath}` }
+    }
+
+    case 'ln': {
+      if (args.length < 2) return { output: '\x1b[31mln: missing operand\x1b[0m' }
+      const symbolic = args.includes('-s')
+      const srcArg = args.find(a => !a.startsWith('-')) || args[args.length - 2]
+      const dstArg = args[args.length - 1]
+      if (symbolic) {
+        const dstPath = resolvePath(dstArg, session.cwd)
+        const { parent, name } = getParentAndName(dstPath)
+        if (!parent || !parent.children) return { output: `\x1b[31mln: cannot create '${dstArg}'\x1b[0m` }
+        parent.children.set(name, createSymlink(name, srcArg, session.username))
+        return { output: '' }
+      }
+      return { output: `\x1b[33mZ-OS: Hard links are replaced by ZFS snapshots. Use 'zfs snapshot' instead.\x1b[0m` }
+    }
+
+    case 'diff': {
+      if (args.length < 2) return { output: '\x1b[31mdiff: need two files\x1b[0m' }
+      const node1 = getNodeAtPath(resolvePath(args[0], session.cwd))
+      const node2 = getNodeAtPath(resolvePath(args[1], session.cwd))
+      if (!node1 || node1.type === 'directory') return { output: `\x1b[31mdiff: ${args[0]}: Not a file\x1b[0m` }
+      if (!node2 || node2.type === 'directory') return { output: `\x1b[31mdiff: ${args[1]}: Not a file\x1b[0m` }
+      const lines1 = (node1.content || '').split('\n')
+      const lines2 = (node2.content || '').split('\n')
+      const maxLen = Math.max(lines1.length, lines2.length)
+      const diffs: string[] = []
+      for (let i = 0; i < maxLen; i++) {
+        const l1 = lines1[i] ?? ''
+        const l2 = lines2[i] ?? ''
+        if (l1 !== l2) {
+          diffs.push(`\x1b[31m< ${l1}\x1b[0m`)
+          diffs.push(`\x1b[32m> ${l2}\x1b[0m`)
+        }
+      }
+      return { output: diffs.length > 0 ? diffs.join('\n') : '\x1b[32mFiles are identical\x1b[0m' }
+    }
+
+    case 'sort': {
+      if (!args[0]) return { output: '\x1b[31msort: missing operand\x1b[0m' }
+      const node = getNodeAtPath(resolvePath(args[0], session.cwd))
+      if (!node || node.type === 'directory') return { output: `\x1b[31msort: ${args[0]}: No such file\x1b[0m` }
+      const reverse = args.includes('-r')
+      const numeric = args.includes('-n')
+      const lines = (node.content || '').split('\n').filter(Boolean)
+      lines.sort((a, b) => numeric ? parseFloat(a) - parseFloat(b) : a.localeCompare(b))
+      if (reverse) lines.reverse()
+      return { output: lines.join('\n') }
+    }
+
+    case 'uniq': {
+      if (!args[0]) return { output: '\x1b[31muniq: missing operand\x1b[0m' }
+      const node = getNodeAtPath(resolvePath(args[0], session.cwd))
+      if (!node || node.type === 'directory') return { output: `\x1b[31muniq: ${args[0]}: No such file\x1b[0m` }
+      const lines = (node.content || '').split('\n').filter(Boolean)
+      const unique = lines.filter((line, i) => i === 0 || line !== lines[i - 1])
+      return { output: unique.join('\n') }
+    }
+
+    case 'sed': {
+      if (args.length < 3) return { output: '\x1b[31msed: usage: sed s/old/new/ file\x1b[0m' }
+      const expr = args[0]
+      const filePath = resolvePath(args[1], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node || node.type === 'directory') return { output: `\x1b[31msed: ${args[1]}: No such file\x1b[0m` }
+      const match = expr.match(/^s\/(.+?)\/(.*)\/([gi]?)$/)
+      if (!match) return { output: '\x1b[31msed: invalid expression\x1b[0m' }
+      const [, pattern, replacement, flags] = match
+      const regex = new RegExp(pattern, flags)
+      node.content = (node.content || '').replace(regex, replacement)
+      node.modified = new Date()
+      node.hash = hashContent(node.content)
+      return { output: '' }
+    }
+
+    case 'awk': {
+      if (args.length < 2) return { output: '\x1b[31mawk: usage: awk \'{print $1}\' file\x1b[0m' }
+      const program = args[0].replace(/^'|'$/g, '')
+      const filePath = resolvePath(args[args.length - 1], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node || node.type === 'directory') return { output: `\x1b[31mawk: cannot open file\x1b[0m` }
+      const printMatch = program.match(/\{print\s+\$(\d+)\}/)
+      if (!printMatch) return { output: '\x1b[33mZ-OS awk: simplified mode - supports {print $N}\x1b[0m' }
+      const fieldIdx = parseInt(printMatch[1]) - 1
+      const lines = (node.content || '').split('\n').filter(Boolean)
+      const result = lines.map(line => {
+        const fields = line.split(/\s+/)
+        return fields[fieldIdx] || ''
+      })
+      return { output: result.join('\n') }
+    }
+
+    case 'tee': {
+      if (!args[0]) return { output: '\x1b[31mtee: missing operand\x1b[0m' }
+      const append = args.includes('-a')
+      const fileName = args.find(a => !a.startsWith('-')) || ''
+      if (!fileName) return { output: '\x1b[31mtee: missing file\x1b[0m' }
+      return { output: `\x1b[32mOutput will be ${append ? 'appended to' : 'written to'} '${fileName}'\x1b[0m` }
+    }
+
+    case 'xz': case 'gzip': case 'compress': {
+      if (!args[0]) return { output: `\x1b[31m${cmd}: missing operand\x1b[0m` }
+      const filePath = resolvePath(args[0], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node || node.type === 'directory') return { output: `\x1b[31m${cmd}: ${args[0]}: No such file\x1b[0m` }
+      node.compressed = true
+      node.size = Math.floor(node.size * 0.35)
+      return { output: `\x1b[32m${args[0]}: compressed with zstd (ratio: 65% reduction)\x1b[0m` }
+    }
+
+    case 'unxz': case 'gunzip': case 'decompress': {
+      if (!args[0]) return { output: `\x1b[31m${cmd}: missing operand\x1b[0m` }
+      const filePath = resolvePath(args[0], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node) return { output: `\x1b[31m${cmd}: ${args[0]}: No such file\x1b[0m` }
+      if (!node.compressed) return { output: `\x1b[33m${cmd}: ${args[0]}: Not compressed\x1b[0m` }
+      node.compressed = false
+      node.size = Math.floor(node.size / 0.35)
+      return { output: `\x1b[32m${args[0]}: decompressed\x1b[0m` }
+    }
+
+    case 'md5sum': case 'sha256sum': case 'sha512sum': {
+      if (!args[0]) return { output: `\x1b[31m${cmd}: missing operand\x1b[0m` }
+      const filePath = resolvePath(args[0], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node || node.type === 'directory') return { output: `\x1b[31m${cmd}: ${args[0]}: No such file\x1b[0m` }
+      const content = node.content || ''
+      let hash = 0
+      for (let i = 0; i < content.length; i++) {
+        hash = ((hash << 5) - hash) + content.charCodeAt(i)
+        hash = hash & hash
+      }
+      const hashLen = cmd === 'md5sum' ? 32 : cmd === 'sha256sum' ? 64 : 128
+      const hashStr = Math.abs(hash).toString(16).padStart(8, '0').repeat(Math.ceil(hashLen / 8)).slice(0, hashLen)
+      return { output: `${hashStr}  ${args[0]}` }
+    }
+
+    case 'chown': {
+      if (args.length < 2) return { output: '\x1b[31mchown: missing operand\x1b[0m' }
+      const [owner, group] = args[0].split(':')
+      const filePath = resolvePath(args[1], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node) return { output: `\x1b[31mchown: cannot access '${args[1]}'\x1b[0m` }
+      node.owner = owner
+      if (group) node.group = group
+      return { output: '' }
+    }
+
+    case 'chgrp': {
+      if (args.length < 2) return { output: '\x1b[31mchgrp: missing operand\x1b[0m' }
+      const filePath = resolvePath(args[1], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node) return { output: `\x1b[31mchgrp: cannot access '${args[1]}'\x1b[0m` }
+      node.group = args[0]
+      return { output: '' }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 2: Z-SCRIPT LANGUAGE
+    // ═══════════════════════════════
+
+    case 'zrun': {
+      if (!args[0]) return { output: '\x1b[31mzrun: missing script file\x1b[0m' }
+      const filePath = resolvePath(args[0], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node || node.type === 'directory') return { output: `\x1b[31mzrun: ${args[0]}: No such file\x1b[0m` }
+      const content = node.content || ''
+      const scriptLines = content.split('\n').filter(l => l.trim() && !l.trim().startsWith('#'))
+      const output: string[] = []
+      for (const line of scriptLines) {
+        const trimmed = line.trim()
+        if (trimmed.startsWith('echo ')) {
+          output.push(trimmed.slice(5).replace(/^["']|["']$/g, ''))
+        } else if (trimmed.startsWith('let ')) {
+          const expr = trimmed.slice(4)
+          try { output.push(String(eval(expr))) } catch { output.push('\x1b[31mError in expression\x1b[0m') }
+        } else if (trimmed.startsWith('var ')) {
+          const [varName, ...rest] = trimmed.slice(4).split('=')
+          session.variables[varName.trim()] = rest.join('=').trim().replace(/^["']|["']$/g, '')
+        } else if (trimmed.startsWith('if ')) {
+          output.push('\x1b[33m[Conditional: evaluated]\x1b[0m')
+        } else if (trimmed.startsWith('for ')) {
+          output.push('\x1b[33m[Loop: executed]\x1b[0m')
+        } else if (trimmed.startsWith('func ')) {
+          output.push('\x1b[33m[Function defined]\x1b[0m')
+        } else if (trimmed === 'ls' || trimmed.startsWith('ls ')) {
+          const result = executeSingleCommand('ls', trimmed.split(/\s+/).slice(1), session, '')
+          output.push(result.output)
+        } else if (trimmed === 'pwd') {
+          output.push(session.cwd)
+        } else if (trimmed === 'date') {
+          output.push(new Date().toString())
+        } else if (trimmed.startsWith('zsysinfo') || trimmed.startsWith('zsec') || trimmed.startsWith('znet') || trimmed.startsWith('zpkg')) {
+          const parts = trimmed.split(/\s+/)
+          const result = executeSingleCommand(parts[0], parts.slice(1), session, '')
+          output.push(result.output)
+        }
+      }
+      return { output: output.join('\n') || '\x1b[33mScript completed with no output\x1b[0m' }
+    }
+
+    case 'zcompile': {
+      if (!args[0]) return { output: '\x1b[31mzcompile: missing script file\x1b[0m' }
+      const filePath = resolvePath(args[0], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node) return { output: `\x1b[31mzcompile: ${args[0]}: No such file\x1b[0m` }
+      const content = node.content || ''
+      const lines = content.split('\n').filter(l => l.trim() && !l.trim().startsWith('#'))
+      const bytecode: string[] = [
+        '\x1b[1;36mZ-Bytecode v3.0\x1b[0m',
+        '\x1b[33m─── Compiled Output ───\x1b[0m',
+        '',
+        `; Source: ${args[0]}`,
+        `; Instructions: ${lines.length}`,
+        `; Timestamp: ${new Date().toISOString()}`,
+        '',
+      ]
+      lines.forEach((line, i) => {
+        const op = line.trim().split(' ')[0]
+        const operands = line.trim().slice(op.length).trim()
+        const opMap: Record<string, string> = {
+          'echo': 'OUT', 'let': 'CALC', 'var': 'STORE', 'if': 'BRANCH',
+          'for': 'LOOP', 'func': 'DEF', 'return': 'RET', 'while': 'WHILE',
+          'ls': 'SYSCALL_LS', 'pwd': 'SYSCALL_PWD', 'cat': 'SYSCALL_CAT',
+          'cd': 'SYSCALL_CD', 'mkdir': 'SYSCALL_MKDIR',
+        }
+        const opcode = opMap[op] || 'EXEC'
+        bytecode.push(`  ${String(i).padStart(4)}  ${opcode.padEnd(14)} ${operands}`)
+      })
+      bytecode.push('', `\x1b[32mCompilation successful. ${lines.length} instructions.\x1b[0m`)
+      return { output: bytecode.join('\n') }
+    }
+
+    case 'zdebug': {
+      if (!args[0]) return { output: '\x1b[31mzdebug: missing script file\x1b[0m' }
+      const filePath = resolvePath(args[0], session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node) return { output: `\x1b[31mzdebug: ${args[0]}: No such file\x1b[0m` }
+      const content = node.content || ''
+      const lines = content.split('\n')
+      const debug: string[] = [
+        '\x1b[1;36mZ-Debugger v3.0\x1b[0m',
+        '\x1b[33m─── Step-by-Step Trace ───\x1b[0m',
+        '',
+      ]
+      lines.forEach((line, i) => {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('#')) {
+          debug.push(`  \x1b[90m${String(i + 1).padStart(4)}│ ${trimmed || '[empty]'}\x1b[0m  SKIP`)
+        } else {
+          debug.push(`  \x1b[32m${String(i + 1).padStart(4)}│ ${trimmed}\x1b[0m  → EXECUTE`)
+        }
+      })
+      debug.push('', '\x1b[32mDebug complete. No errors found.\x1b[0m')
+      return { output: debug.join('\n') }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 3: DATABASE TOOLS
+    // ═══════════════════════════════
+
+    case 'zdb': {
+      if (args[0] === 'create' && args[1]) {
+        const dbPath = resolvePath(args[1] + '.zdb', session.cwd)
+        const { parent, name } = getParentAndName(dbPath)
+        if (!parent || !parent.children) return { output: `\x1b[31mzdb: cannot create database\x1b[0m` }
+        parent.children.set(name, createFile(name, '-rw-------', session.username, session.username,
+          `# Z-OS Database: ${args[1]}\n# Created: ${new Date().toISOString()}\n# Type: key-value store\n{}`))
+        return { output: `\x1b[32mDatabase '${args[1]}.zdb' created.\x1b[0m` }
+      }
+      if (args[0] === 'tables' || args[0] === 'list') {
+        const dbFiles: string[] = []
+        function findDbs(node: FileSystemNode, currentPath: string) {
+          if (node.name.endsWith('.zdb')) dbFiles.push(currentPath)
+          if (node.children) for (const [n, c] of node.children) findDbs(c, currentPath + '/' + n)
+        }
+        findDbs(rootFS, '/')
+        return { output: dbFiles.length > 0 ? `\x1b[1;36mZ-DB Databases:\x1b[0m\n${dbFiles.map(f => `  \x1b[32m✓\x1b[0m ${f}`).join('\n')}` : '\x1b[33mNo databases found. Use zdb create <name>\x1b[0m' }
+      }
+      if (args[0] === 'query' && args[1]) {
+        return { output: `\x1b[1;36mZ-DB Query Result:\x1b[0m\n  Query: ${args.slice(1).join(' ')}\n  Rows affected: ${Math.floor(Math.random() * 100)}\n  Time: ${(Math.random() * 10).toFixed(2)}ms` }
+      }
+      return { output: `\x1b[33mUsage: zdb [create|tables|query] [args]\x1b[0m
+  zdb create <name>     Create new database
+  zdb tables            List all databases
+  zdb query <sql>       Execute SQL-like query` }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 4: DOCKER/CONTAINER TOOLS
+    // ═══════════════════════════════
+
+    case 'zdocker': case 'docker': {
+      if (args[0] === 'ps' || args.length === 0) {
+        return { output: `\x1b[1;36mZ-Container Runtime\x1b[0m
+CONTAINER ID   IMAGE               STATUS      PORTS                  NAMES
+a1b2c3d4e5f6   z-os/nginx:latest   Up 2h       0.0.0.0:80->80/tcp     web-server
+f6e5d4c3b2a1   z-os/redis:latest   Up 2h       0.0.0.0:6379->6379     cache
+1a2b3c4d5e6f   z-os/node:22        Up 45m      0.0.0.0:3000->3000     app-server` }
+      }
+      if (args[0] === 'images') {
+        return { output: `\x1b[1;36mZ-Container Images\x1b[0m
+REPOSITORY       TAG       SIZE
+z-os/nginx       latest    24MB
+z-os/redis       latest    12MB
+z-os/node        22        128MB
+z-os/python      3.13      64MB
+z-os/postgres    17        96MB` }
+      }
+      if (args[0] === 'run' && args[1]) {
+        return { output: `\x1b[32mContainer '${args[1]}' starting...\x1b[0m
+Pulling image... done
+Creating container... done
+Starting process... done
+\x1b[32mContainer running on port ${8000 + Math.floor(Math.random() * 1000)}\x1b[0m` }
+      }
+      if (args[0] === 'build' && args[1]) {
+        return { output: `\x1b[32mBuilding image '${args[1]}'...\x1b[0m
+Step 1/5 : FROM z-os/base:latest
+Step 2/5 : COPY . /app
+Step 3/5 : RUN zpkg install deps
+Step 4/5 : EXPOSE 8080
+Step 5/5 : CMD ["./start"]
+\x1b[32mSuccessfully built image '${args[1]}'\x1b[0m` }
+      }
+      if (args[0] === 'compose') {
+        return { output: `\x1b[1;36mZ-Docker Compose\x1b[0m
+Services:
+  web:     z-os/nginx:latest    (running, port 80)
+  api:     z-os/node:22         (running, port 3000)
+  db:      z-os/postgres:17     (running, port 5432)
+  cache:   z-os/redis:latest    (running, port 6379)` }
+      }
+      return { output: `\x1b[33mUsage: zdocker [ps|images|run|build|compose] [args]\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 5: GIT TOOLS
+    // ═══════════════════════════════
+
+    case 'zgit': case 'git': {
+      if (args[0] === 'status' || args.length === 0) {
+        return { output: `\x1b[1;36mZ-Git Status\x1b[0m
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  \x1b[31mmodified:   src/app.ts\x1b[0m
+  \x1b[31mmodified:   config/z-security.conf\x1b[0m
+
+Untracked files:
+  \x1b[31mnew-file:  src/z-ai-module.ts\x1b[0m
+  \x1b[31mnew-file:  src/z-quantum-lib.ts\x1b[0m` }
+      }
+      if (args[0] === 'log') {
+        const commits = [
+          { hash: 'a1b2c3d', msg: 'feat: add quantum crypto module', time: '2 hours ago' },
+          { hash: 'e4f5g6h', msg: 'fix: firewall rule bypass patch', time: '5 hours ago' },
+          { hash: 'i7j8k9l', msg: 'feat: Z-Script compiler v2', time: '1 day ago' },
+          { hash: 'm0n1o2p', msg: 'security: harden kernel syscalls', time: '2 days ago' },
+          { hash: 'q3r4s5t', msg: 'feat: AI threat detection v3', time: '3 days ago' },
+        ]
+        return { output: `\x1b[1;36mZ-Git Log\x1b[0m\n${commits.map(c => `\x1b[33m${c.hash}\x1b[0m ${c.msg} \x1b[90m(${c.time})\x1b[0m`).join('\n')}` }
+      }
+      if (args[0] === 'branch') {
+        return { output: `\x1b[1;36mZ-Git Branches\x1b[0m\n* \x1b[32mmain\x1b[0m\n  develop\n  feature/quantum-crypto\n  feature/ai-firewall\n  hotfix/zve-2026-007` }
+      }
+      if (args[0] === 'diff') {
+        return { output: `\x1b[1;36mZ-Git Diff\x1b[0m
+\x1b[33mdiff --git a/src/app.ts b/src/app.ts\x1b[0m
+index a1b2c3d..e4f5g6h 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -42,6 +42,8 @@
+   const crypto = new QuantumCrypto();
++  crypto.enableKyber1024();
++  crypto.setRotationPeriod('24h');` }
+      }
+      return { output: `\x1b[33mUsage: zgit [status|log|branch|diff] [args]\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 6: CRON & TASK SCHEDULER
+    // ═══════════════════════════════
+
+    case 'zcron': {
+      if (args[0] === 'list' || args.length === 0) {
+        return { output: `\x1b[1;36mZ-Cron - Scheduled Tasks\x1b[0m
+────────────────────────────────────────────────────────
+ID      Schedule          Command                     Last Run
+001     */5 * * * *       zsec scan --quick           3 min ago
+002     0 * * * *         zpkg update --check          42 min ago
+003     0 0 * * *         zfs scrub zroot              12h ago
+004     0 0 * * 0         zsec harden --auto           5 days ago
+005     @reboot           z-firewall --reload          On boot` }
+      }
+      if (args[0] === 'add' && args.length >= 3) {
+        return { output: `\x1b[32mCron job added: ${args[1]} ${args.slice(2).join(' ')}\x1b[0m` }
+      }
+      if (args[0] === 'remove' && args[1]) {
+        return { output: `\x1b[32mCron job ${args[1]} removed.\x1b[0m` }
+      }
+      return { output: `\x1b[33mUsage: zcron [list|add|remove] [schedule] [command]\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 7: LOG VIEWER
+    // ═══════════════════════════════
+
+    case 'zlog': {
+      if (args[0] === 'system' || args.length === 0) {
+        return { output: `\x1b[1;36mZ-OS System Log\x1b[0m
+────────────────────────────────────────────────────────
+\x1b[32m[2026-06-22 10:00:01]\x1b[0m [INFO] Z-OS kernel booted successfully
+\x1b[32m[2026-06-22 10:00:02]\x1b[0m [INFO] All 15 system services started
+\x1b[32m[2026-06-22 10:00:03]\x1b[0m [INFO] ZFS filesystem mounted
+\x1b[33m[2026-06-22 10:15:22]\x1b[0m [WARN] Anomalous connection from 185.220.101.42
+\x1b[31m[2026-06-22 10:15:23]\x1b[0m [BLOCK] Firewall blocked 185.220.101.42 (Tor exit)
+\x1b[32m[2026-06-22 11:00:00]\x1b[0m [INFO] Scheduled security scan completed
+\x1b[33m[2026-06-22 11:30:45]\x1b[0m [WARN] Privileged operation: root apt update
+\x1b[31m[2026-06-22 12:02:11]\x1b[0m [BLOCK] Port scan from 45.33.32.156 blocked
+\x1b[32m[2026-06-22 12:30:00]\x1b[0m [INFO] ZFS scrub: 0 errors found
+\x1b[32m[2026-06-22 13:00:00]\x1b[0m [INFO] Key rotation completed (AES-256-GCM)` }
+      }
+      if (args[0] === 'auth') {
+        return { output: `\x1b[1;36mZ-OS Auth Log\x1b[0m
+────────────────────────────────────────────────────────
+\x1b[32m[10:00:05]\x1b[0m Session opened for user z-user
+\x1b[33m[10:15:22]\x1b[0m Failed password for root from 185.220.101.42
+\x1b[31m[10:15:23]\x1b[0m BLOCKED: brute force attempt from 185.220.101.42
+\x1b[33m[11:02:11]\x1b[0m Invalid user admin from 45.33.32.156
+\x1b[31m[11:02:12]\x1b[0m BLOCKED: port scanner 45.33.32.156
+\x1b[32m[13:00:00]\x1b[0m z-user authenticated via Ed25519 key` }
+      }
+      if (args[0] === 'firewall') {
+        return { output: `\x1b[1;36mZ-Firewall Log\x1b[0m
+────────────────────────────────────────────────────────
+\x1b[31m[BLOCK]\x1b[0m 185.220.101.42 -> :22 (Tor exit node) [Rule: fw005]
+\x1b[31m[BLOCK]\x1b[0m 45.33.32.156 -> :* (port scanner) [Rule: fw006]
+\x1b[31m[BLOCK]\x1b[0m 103.21.244.0/24 -> :22 (brute force) [AI-detect]
+\x1b[32m[ALLOW]\x1b[0m 10.0.0.50 -> :443 (legitimate) [Rule: fw003]
+\x1b[32m[ALLOW]\x1b[0m 192.168.1.10 -> :80 (legitimate) [Rule: fw002]` }
+      }
+      return { output: `\x1b[33mUsage: zlog [system|auth|firewall]\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 8: USER MANAGEMENT
+    // ═══════════════════════════════
+
+    case 'zuser': case 'useradd': case 'usermod': {
+      if (args[0] === 'list' || (cmd === 'zuser' && args.length === 0)) {
+        return { output: `\x1b[1;36mZ-OS User Management\x1b[0m
+────────────────────────────────────────────────────────
+Username     UID   GID   Home              Shell           Status
+root         0     0     /root             /bin/zsh        \x1b[32mactive\x1b[0m
+z-user       1000  1000  /home/z-user      /bin/zsh        \x1b[32mactive\x1b[0m
+www          33    33    /var/www          /bin/nologin    \x1b[33mservice\x1b[0m
+docker       998   998   /var/lib/docker   /bin/nologin    \x1b[33mservice\x1b[0m
+postgres     997   997   /var/lib/postgres /bin/nologin    \x1b[90mdisabled\x1b[0m` }
+      }
+      if (args[0] === 'add' && args[1]) {
+        return { output: `\x1b[32mUser '${args[1]}' created (UID: ${1001 + Math.floor(Math.random() * 100)})\x1b[0m` }
+      }
+      if (args[0] === 'passwd' && args[1]) {
+        return { output: `\x1b[32mPassword for '${args[1]}' updated.\x1b[0m` }
+      }
+      return { output: `\x1b[33mUsage: zuser [list|add|passwd] [username]\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 9: SYSTEM BACKUP
+    // ═══════════════════════════════
+
+    case 'zbackup': {
+      if (args[0] === 'create') {
+        return { output: `\x1b[1;36mZ-Backup System\x1b[0m
+────────────────────────────────────────────────────────
+\x1b[32mCreating backup...\x1b[0m
+  Snapshot: zroot@backup-${new Date().toISOString().split('T')[0]}
+  Compressed: zstd level 19
+  Encrypted: AES-256-GCM
+  Size: 2.4 GB (compressed from 8.1 GB)
+  \x1b[32mBackup created successfully.\x1b[0m` }
+      }
+      if (args[0] === 'list') {
+        return { output: `\x1b[1;36mZ-Backup Snapshots\x1b[0m
+────────────────────────────────────────────────────────
+NAME                              SIZE     DATE
+zroot@backup-2026-06-22           2.4G     Today
+zroot@backup-2026-06-21           2.3G     Yesterday
+zroot@backup-2026-06-20           2.2G     2 days ago
+zroot@backup-2026-06-15           2.1G     1 week ago` }
+      }
+      if (args[0] === 'restore' && args[1]) {
+        return { output: `\x1b[33mRestoring from ${args[1]}...\x1b[0m
+  Decrypting... done
+  Decompressing... done
+  Verifying checksums... done
+  \x1b[32mRestore completed successfully.\x1b[0m` }
+      }
+      return { output: `\x1b[33mUsage: zbackup [create|list|restore] [snapshot]\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 10: PERFORMANCE MONITOR
+    // ═══════════════════════════════
+
+    case 'zperf': {
+      const m = getSystemMetrics()
+      return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
+\x1b[1;36m║              \x1b[1;33mZ-OS Performance Monitor\x1b[1;36m                                  ║\x1b[0m
+\x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[1;33mCPU Performance\x1b[0m                                               \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Usage:    ${m.cpuUsage.toFixed(1)}% ${'█'.repeat(Math.floor(m.cpuUsage/5))}${'░'.repeat(20-Math.floor(m.cpuUsage/5))}  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Cores:    4 physical / 4 logical                        \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Freq:     4.2 GHz (turbo: 4.8 GHz)                     \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Load:     ${m.loadAvg.join(', ')}                                  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[1;33mMemory Performance\x1b[0m                                            \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Used:     ${Math.floor(m.memUsed/1024*4)}MB / 16384MB ${(m.memUsed/m.memTotal*100).toFixed(1)}%                    \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Cache:    2048 MB (smart allocation)                    \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Swap:     0 MB / 8192 MB (0% used)                     \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Dedup:    Saving 1.2 GB (30% reduction)                 \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[1;33mI/O Performance\x1b[0m                                               \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Disk:     Seq Read 3.2 GB/s | Write 2.8 GB/s            \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  IOPS:     120K read | 95K write                         \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Network:  RX ${(m.netRx/1024/1024).toFixed(1)} MB | TX ${(m.netTx/1024/1024).toFixed(1)} MB                   \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[1;33mScheduler Stats\x1b[0m                                              \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Context switches: 12,450/s (AI optimized)               \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Avg latency: 0.8μs (Linux avg: 1.3μs)                  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  Processes: ${m.processes} | Threads: ${m.threads}                             \x1b[1;36m║\x1b[0m
+\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 11: ZFS MANAGEMENT
+    // ═══════════════════════════════
+
+    case 'zfs': {
+      if (args[0] === 'list' || args.length === 0) {
+        return { output: `\x1b[1;36mZFS Pool Status\x1b[0m
+────────────────────────────────────────────────────────
+NAME       SIZE    ALLOC   FREE   DEDUP  COMPRESS  HEALTH
+zroot      64G     8.2G    55.8G  1.30x  zstd-19   \x1b[32mONLINE\x1b[0m
+zroot/home 32G    2.1G    29.9G  1.25x  zstd-19   \x1b[32mONLINE\x1b[0m
+zroot/var  16G     980M   15.0G  1.10x  zstd-19   \x1b[32mONLINE\x1b[0m
+
+Pool: zroot
+  State: \x1b[32mONLINE\x1b[0m
+  Scrub: completed 0 errors
+  Errors: No known data errors` }
+      }
+      if (args[0] === 'snapshot' && args[1]) {
+        return { output: `\x1b[32mSnapshot created: zroot@${args[1]}\x1b[0m
+  Size: 245 MB (incremental)
+  Encrypted: AES-256-GCM` }
+      }
+      if (args[0] === 'scrub') {
+        return { output: `\x1b[33mScrubbing pool zroot...\x1b[0m
+  Progress: 0% (estimated 12 min)
+  Scanned: 0 / 8.2G
+  Errors: 0` }
+      }
+      if (args[0] === 'dedup') {
+        return { output: `\x1b[1;36mZFS Deduplication Stats\x1b[0m
+────────────────────────────────────────────────────────
+  Dedup Ratio: 1.30x
+  Space Saved: 2.4 GB
+  Entries: 142,560
+  Memory Used: 128 MB` }
+      }
+      return { output: `\x1b[33mUsage: zfs [list|snapshot|scrub|dedup] [args]\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 12: SYSTEM UPDATE
+    // ═══════════════════════════════
+
+    case 'zupdate': {
+      return { output: `\x1b[1;36mZ-OS System Update\x1b[0m
+────────────────────────────────────────────────────────
+\x1b[33mChecking for updates...\x1b[0m
+  Repository: z-os-quantum
+  Last updated: 2 hours ago
+
+\x1b[32mAvailable updates:\x1b[0m
+  z-kernel         6.2.0-2 -> 6.2.0-3  (security fix: ZVE-2026-001)
+  z-firewall       3.1.1  -> 3.1.2   (security fix: ZVE-2026-004)
+  z-ai-detect      3.0.0  -> 3.0.1   (improved detection model)
+  nginx            1.26.0 -> 1.27.0   (performance improvement)
+
+\x1b[33mApplying updates (live patching, no reboot needed)...\x1b[0m
+  [1/4] z-kernel......... \x1b[32mDONE\x1b[0m
+  [2/4] z-firewall........ \x1b[32mDONE\x1b[0m
+  [3/4] z-ai-detect....... \x1b[32mDONE\x1b[0m
+  [4/4] nginx.............. \x1b[32mDONE\x1b[0m
+
+\x1b[32mSystem updated successfully. 0 vulnerabilities remaining.\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // PHASE 13: MISC POWER TOOLS
+    // ═══════════════════════════════
+
+    case 'watch': {
+      if (!args[0]) return { output: '\x1b[31mwatch: missing command\x1b[0m' }
+      const result = executeSingleCommand(args[0], args.slice(1), session, '')
+      return { output: `Every 2.0s: ${args.join(' ')}\n${new Date().toLocaleString()}\n\n${result.output}` }
+    }
+
+    case 'sleep': {
+      return { output: `\x1b[33mZ-OS: Sleep bypassed (non-blocking terminal)\x1b[0m` }
+    }
+
+    case 'wget': {
+      if (!args[0]) return { output: '\x1b[31mwget: missing URL\x1b[0m' }
+      const fileName = args[0].split('/').pop() || 'index.html'
+      const filePath = resolvePath(fileName, session.cwd)
+      const { parent, name } = getParentAndName(filePath)
+      if (parent && parent.children) {
+        parent.children.set(name, createFile(name, '-rw-r--r--', session.username, session.username, `[Downloaded from ${args[0]}]`))
+      }
+      return { output: `\x1b[33m--${new Date().toISOString()}--  ${args[0]}\x1b[0m
+Resolving... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 256 [text/html]
+Saving to: '${fileName}'
+\x1b[32m'${fileName}' saved [256/256]\x1b[0m` }
+    }
+
+    case 'curl': {
+      if (!args[0]) return { output: '\x1b[31mcurl: missing URL\x1b[0m' }
+      return { output: `\x1b[33m  % Total    % Received % Xferd  Speed   Time\x1b[0m
+100   256  100   256  0     0   1024      0 --:--:-- --:--:--  1024
+HTTP/1.1 200 OK
+Content-Type: text/html
+Server: nginx/1.27.0 (Z-OS)
+Strict-Transport-Security: max-age=31536000
+X-Powered-By: Z-OS/3.0
+
+<!DOCTYPE html><html><body><h1>Hello from Z-OS</h1></body></html>` }
+    }
+
+    case 'ssh': {
+      if (!args[0]) return { output: '\x1b[31mssh: missing destination\x1b[0m' }
+      return { output: `\x1b[33mConnecting to ${args[0]}...\x1b[0m
+The authenticity of host can't be established.
+Ed25519 key fingerprint is SHA256:z8Kq2mN4pR7sT9vW1xY3zA5bC7dE9fG0hI2jK4lM6n
+\x1b[32mConnected securely via quantum-resistant key exchange.\x1b[0m` }
+    }
+
+    case 'scp': {
+      if (args.length < 2) return { output: '\x1b[31mscp: missing arguments\x1b[0m' }
+      return { output: `\x1b[32mSecure copy initiated...\x1b[0m
+Transfer: AES-256-GCM encrypted
+Progress: ████████████████████ 100%
+\x1b[32mTransfer complete.\x1b[0m` }
+    }
+
+    case 'kill': {
+      if (!args[0]) return { output: '\x1b[31mkill: missing PID\x1b[0m' }
+      return { output: `\x1b[32mProcess ${args[0]} terminated with AI-optimized signal delivery.\x1b[0m` }
+    }
+
+    case 'killall': {
+      if (!args[0]) return { output: '\x1b[31mkillall: missing process name\x1b[0m' }
+      return { output: `\x1b[32mAll instances of '${args[0]}' terminated.\x1b[0m` }
+    }
+
+    case 'reboot': {
+      return { output: `\x1b[33mZ-OS: Live kernel patching eliminates the need for reboot.\x1b[0m
+\x1b[32mAll updates applied in real-time. System uptime preserved.\x1b[0m` }
+    }
+
+    case 'shutdown': {
+      return { output: `\x1b[33mZ-OS does not support shutdown in cloud mode.\x1b[0m
+Use 'exit' to disconnect your session.` }
+    }
+
+    case 'dmesg': {
+      return { output: `\x1b[1;36mZ-OS Kernel Messages\x1b[0m
+[    0.000000] Z-OS Quantum Kernel 6.2.0-z-quantum
+[    0.000001] Command line: BOOT_IMAGE=/boot/vmlinuz-6.2.0-z-quantum root=/dev/zroot
+[    0.001234] Z-Quantum CPU initialized (4 cores @ 4.2GHz)
+[    0.002456] ZFS: zroot pool mounted with zstd-19 compression
+[    0.003789] z-quantum-crypto: AES-256-GCM + Kyber-1024 loaded
+[    0.004012] z-kernel-guard: Monitoring 342 syscalls
+[    0.005234] z-firewall: 247 rules loaded (AI model: z-threat-v3)
+[    0.006456] z-ai-detect: Starting threat detection engine
+[    0.007890] z-netmanager: Interface z0 up (10 Gbps)
+[    0.009012] All system services operational` }
+    }
+
+    case 'strace': case 'ztrace': {
+      if (!args[0]) return { output: `\x1b[31m${cmd}: missing command\x1b[0m` }
+      return { output: `\x1b[1;36mZ-Trace: ${args.join(' ')}\x1b[0m
+z_syscall(open, "/etc/z-os-release", O_RDONLY) = 3
+z_syscall(read, 3, ...)              = 256 bytes
+z_syscall(close, 3)                  = 0
+z_syscall(write, 1, ...)             = 128 bytes
+z_syscall(exit_group, 0)             = ?
+Total syscalls: 4, Total time: 0.3ms` }
+    }
+
+    case 'lsof': {
+      if (!args[0]) return { output: `\x1b[1;36mZ-OS Open Files\x1b[0m
+COMMAND    PID   USER   FD   TYPE   DEVICE   SIZE/OFF   NAME
+zsh       142   z-user  0r   CHR    0,6      0t0        /dev/tty0
+zsh       142   z-user  1w   CHR    0,6      0t0        /dev/tty0
+zsh       142   z-user  2w   CHR    0,6      0t0        /dev/tty0
+nginx      10   www    4u   IPv4   12643    0t0        TCP *:80
+sshd       11   root   3u   IPv4   12892    0t0        TCP *:22` }
+      return { output: `\x1b[31mlsof: ${args[0]} (simplified mode - use ztrace for detailed tracing)\x1b[0m` }
+    }
+
+    case 'sysctl': {
+      if (args.length === 0) {
+        return { output: `\x1b[1;36mZ-OS Sysctl Configuration\x1b[0m
+kernel.z_security_level = 3 (PARANOID)
+kernel.z_ai_scheduling = 1 (enabled)
+kernel.z_quantum_crypto = 1 (enabled)
+kernel.z_live_patch = 1 (enabled)
+kernel.z_dedup = 1 (enabled)
+kernel.aslr = 2 (full randomization)
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+kernel.unprivileged_bpf_disabled = 1
+net.ipv4.ip_forward = 0
+net.ipv4.tcp_syncookies = 1
+net.ipv4.icmp_echo_ignore_all = 0
+net.core.somaxconn = 65535
+vm.swappiness = 10
+vm.overcommit_memory = 0` }
+      }
+      if (args[0] === '-w' && args[1]) {
+        return { output: `\x1b[32m${args[1]}\x1b[0m` }
+      }
+      return { output: `\x1b[33mUsage: sysctl [-w] [variable=value]\x1b[0m` }
+    }
+
     default:
       if (cmd === '') return { output: '' }
       return { output: `\x1b[31mzsh: command not found: ${cmd}\x1b[0m
@@ -1607,10 +2404,18 @@ io.on('connection', (socket) => {
   socket.on('tab-complete', (data: { input: string }) => {
     if (!session) return
     const allCmds = ['help', 'ls', 'cd', 'pwd', 'cat', 'echo', 'mkdir', 'touch', 'rm', 'cp', 'mv',
-      'find', 'grep', 'chmod', 'chown', 'whoami', 'hostname', 'uname', 'date', 'uptime', 'free',
+      'find', 'grep', 'chmod', 'chown', 'chgrp', 'whoami', 'hostname', 'uname', 'date', 'uptime', 'free',
       'df', 'ps', 'top', 'neofetch', 'zsysinfo', 'zsec', 'zfirewall', 'znet', 'zpkg', 'zservice',
       'zps', 'ztour', 'zbenchmark', 'zhistory', 'alias', 'export', 'env', 'tree', 'head', 'tail',
       'wc', 'ping', 'clear', 'exit', 'history', 'id', 'which', 'man', 'sudo',
+      'stat', 'file', 'du', 'ln', 'diff', 'sort', 'uniq', 'sed', 'awk', 'tee',
+      'gzip', 'gunzip', 'xz', 'unxz', 'compress', 'decompress',
+      'md5sum', 'sha256sum', 'sha512sum', 'zrun', 'zcompile', 'zdebug',
+      'zdb', 'zdocker', 'docker', 'zgit', 'git', 'zcron', 'zlog',
+      'zuser', 'useradd', 'usermod', 'zbackup', 'zperf', 'zfs',
+      'zupdate', 'watch', 'sleep', 'wget', 'curl', 'ssh', 'scp',
+      'kill', 'killall', 'reboot', 'shutdown', 'dmesg', 'strace', 'ztrace',
+      'lsof', 'sysctl',
       ...Object.keys(session.aliases)]
     const input = data.input.trim().toLowerCase()
     const matches = allCmds.filter(c => c.startsWith(input))
