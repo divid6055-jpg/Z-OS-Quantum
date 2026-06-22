@@ -103,9 +103,9 @@ export default function ZOSDesktop() {
   // Terminal state
   const [lines, setLines] = useState<TerminalLine[]>([])
   const [currentInput, setCurrentInput] = useState('')
-  const [cwd, setCwd] = useState('/home/z-user')
-  const [username, setUsername] = useState('z-user')
-  const [hostname, setHostname] = useState('z-mainframe')
+  const [cwd, setCwd] = useState('/home/ubuntu')
+  const [username, setUsername] = useState('ubuntu')
+  const [hostname, setHostname] = useState('ubuntu-server')
   const [commandHistory, setCommandHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
 
@@ -151,12 +151,12 @@ export default function ZOSDesktop() {
 
     socketInstance.on('connect', () => {
       setIsConnected(true)
-      console.log('[Z-OS] Connected to kernel')
+      console.log('[Ubuntu] Connected to kernel')
     })
 
     socketInstance.on('disconnect', () => {
       setIsConnected(false)
-      console.log('[Z-OS] Disconnected from kernel')
+      console.log('[Ubuntu] Disconnected from kernel')
     })
 
     socketInstance.on('authenticated', (data: { sessionId: string; hostname: string; username: string; plan: PlanInfo }) => {
@@ -224,27 +224,27 @@ export default function ZOSDesktop() {
     const bootPhases = [
       {
         steps: [
-          { step: '[ Z-KERNEL ] Initializing quantum kernel module...', progress: 5 },
-          { step: '[ Z-KERNEL ] Loading z-kernel-6.2.0-quantum...', progress: 15 },
-          { step: '[ Z-KERNEL ] Mounting ZFS root filesystem...', progress: 25 },
-          { step: '[ Z-KERNEL ] Starting AI process scheduler...', progress: 35 },
+          { step: '[ KERNEL ] Initializing Linux 6.8.0-45-generic...', progress: 5 },
+          { step: '[ KERNEL ] Loading kernel modules...', progress: 15 },
+          { step: '[ KERNEL ] Mounting ext4 root filesystem...', progress: 25 },
+          { step: '[ KERNEL ] Starting systemd (PID 1)...', progress: 35 },
         ],
         phase: 0
       },
       {
         steps: [
-          { step: '[ SECURITY ] Loading quantum-resistant crypto module...', progress: 45 },
-          { step: '[ SECURITY ] Initializing z-kernel-guard (intrusion detection)...', progress: 52 },
-          { step: '[ SECURITY ] Starting z-firewall (247 rules, AI-powered)...', progress: 58 },
-          { step: '[ SECURITY ] Enabling zero-trust architecture...', progress: 62 },
+          { step: '[ SECURITY ] Starting UFW firewall...', progress: 45 },
+          { step: '[ SECURITY ] Starting OpenSSH server...', progress: 52 },
+          { step: '[ SECURITY ] Configuring AppArmor profiles...', progress: 58 },
+          { step: '[ SECURITY ] Setting up fail2ban...', progress: 62 },
         ],
         phase: 1
       },
       {
         steps: [
-          { step: '[ NETWORK ] Bringing up z0 interface (10 Gbps)...', progress: 68 },
-          { step: '[ NETWORK ] Configuring DNS-over-HTTPS...', progress: 72 },
-          { step: '[  SYSTEM  ] Starting system services (13 daemons)...', progress: 78 },
+          { step: '[ NETWORK ] Bringing up eth0 interface...', progress: 68 },
+          { step: '[ NETWORK ] Configuring DNS resolver...', progress: 72 },
+          { step: '[  SYSTEM  ] Starting system services...', progress: 78 },
           { step: `[  SYSTEM  ] Allocating ${plan.cpu}...`, progress: 82 },
         ],
         phase: 2
@@ -252,7 +252,7 @@ export default function ZOSDesktop() {
       {
         steps: [
           { step: `[  MEMORY  ] Configuring ${plan.ram}...`, progress: 88 },
-          { step: `[ STORAGE  ] Mounting ${plan.storage} (ZFS encrypted)...`, progress: 92 },
+          { step: `[ STORAGE  ] Mounting ${plan.storage} (ext4)...`, progress: 92 },
           { step: '[  READY   ] All systems operational!', progress: 100 },
         ],
         phase: 3
@@ -279,9 +279,9 @@ export default function ZOSDesktop() {
         setBooting(false)
         addLine(
           `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║               \x1b[1;33mZ-OS 3.0 Quantum - Ready\x1b[1;36m                                 ║\x1b[0m
-\x1b[1;36m║               \x1b[0mAll systems operational. Security: PARANOID             \x1b[1;36m║\x1b[0m
-\x1b[1;36m║               \x1b[0mType \x1b[36mhelp\x1b[0m for commands, \x1b[36mztour\x1b[0m for guided tour       \x1b[1;36m║\x1b[0m
+\x1b[1;36m║               \x1b[1;33mUbuntu 24.04 LTS - Ready\x1b[1;36m                                 ║\x1b[0m
+\x1b[1;36m║               \x1b[0mAll systems operational. Full root access             \x1b[1;36m║\x1b[0m
+\x1b[1;36m║               \x1b[0mType \x1b[36mhelp\x1b[0m for commands, \x1b[36mstartx\x1b[0m for guided tour       \x1b[1;36m║\x1b[0m
 \x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m`,
           'welcome'
         )
@@ -424,18 +424,18 @@ export default function ZOSDesktop() {
         <DialogContent className="sm:max-w-lg bg-[#0d1321] border-[#1a2744] text-white" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3 text-xl">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 via-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 via-red-500 to-yellow-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
                 <Server className="w-6 h-6 text-white" />
               </div>
               <div>
                 <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent font-bold text-2xl tracking-tight">
-                  Z-OS
+                  Ubuntu
                 </span>
-                <span className="text-gray-400 text-xs ml-2 block">Quantum Edition v3.0</span>
+                <span className="text-gray-400 text-xs ml-2 block">24.04 LTS (Noble Numbat)</span>
               </div>
             </DialogTitle>
             <DialogDescription className="text-gray-400 pt-2 text-sm">
-              أدخل بيانات الاعتماد للاتصال بخادم Z-OS Quantum - النظام الذي يتفوق على لينكس
+              أدخل بيانات الاعتماد للاتصال بخادم Ubuntu Server
             </DialogDescription>
           </DialogHeader>
 
@@ -446,7 +446,7 @@ export default function ZOSDesktop() {
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex items-center gap-2 text-gray-400">
                   <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Z-Quantum 4C/4.2GHz</span>
+                  <span>AMD EPYC 4C/2.45GHz</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-400">
                   <MemoryStick className="w-3.5 h-3.5 text-purple-400" />
@@ -454,25 +454,25 @@ export default function ZOSDesktop() {
                 </div>
                 <div className="flex items-center gap-2 text-gray-400">
                   <HardDrive className="w-3.5 h-3.5 text-blue-400" />
-                  <span>64 GB NVMe (ZFS)</span>
+                  <span>64 GB SSD (ext4)</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-400">
                   <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>PARANOID Security</span>
+                  <span>UFW Firewall</span>
                 </div>
               </div>
             </div>
 
-            {/* Z-OS Advantages */}
-            <div className="bg-gradient-to-r from-cyan-500/5 via-blue-500/5 to-purple-500/5 rounded-lg p-3 border border-[#1a2744]">
-              <div className="text-[10px] text-cyan-300 font-medium mb-1.5 uppercase tracking-wider">مزايا Z-OS على لينكس</div>
+            {/* Ubuntu Features */}
+            <div className="bg-gradient-to-r from-orange-500/5 via-red-500/5 to-yellow-500/5 rounded-lg p-3 border border-[#1a2744]">
+              <div className="text-[10px] text-orange-300 font-medium mb-1.5 uppercase tracking-wider">ميزات Ubuntu</div>
               <div className="grid grid-cols-2 gap-1 text-[10px] text-gray-400">
-                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> AI جدولة ذكية (+40%)</span>
-                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> تشفير مقاوم للكم</span>
-                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> نظام ملفات ذاتي الإصلاح</span>
-                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> بنية Zero-Trust</span>
-                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> تصحيح لحظي بدون إعادة تشغيل</span>
-                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> كشف تهديدات AI 99.97%</span>
+                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> sudo بدون كلمة مرور</span>
+                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> apt install حقيقي</span>
+                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> curl/wget إنترنت حقيقي</span>
+                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> سطح مكتب XFCE (startx)</span>
+                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> systemctl إدارة الخدمات</span>
+                <span className="flex items-center gap-1"><CheckCircle className="w-2.5 h-2.5 text-emerald-400" /> ufw جدار ناري</span>
               </div>
             </div>
 
@@ -485,7 +485,7 @@ export default function ZOSDesktop() {
               <Input
                 id="email"
                 type="email"
-                placeholder="user@z-os.cloud"
+                placeholder="user@ubuntu.com"
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setAuthError('') }}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAuth() }}
@@ -505,7 +505,7 @@ export default function ZOSDesktop() {
                 <Input
                   id="token"
                   type={showToken ? 'text' : 'password'}
-                  placeholder="zos_quantum_xxxxxxxxxxxxxxxx"
+                  placeholder="ubuntutoken_xxxxxxxxxxxxxxxx"
                   value={token}
                   onChange={(e) => { setToken(e.target.value); setAuthError('') }}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleAuth() }}
@@ -543,12 +543,12 @@ export default function ZOSDesktop() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  جاري تهيئة النظام الكمومي...
+                  جاري تهيئة نظام Ubuntu...
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
                   <Zap className="w-4 h-4" />
-                  اتصال بـ Z-OS Quantum
+                  اتصال بـ Ubuntu Server
                 </span>
               )}
             </Button>
@@ -560,11 +560,11 @@ export default function ZOSDesktop() {
       {booting && (
         <div className="fixed inset-0 z-50 bg-[#0a0e17] flex items-center justify-center">
           <div className="max-w-lg w-full px-6 text-center">
-            <div className="w-24 h-24 mx-auto mb-8 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-cyan-500/30 animate-pulse">
+            <div className="w-24 h-24 mx-auto mb-8 rounded-2xl bg-gradient-to-br from-orange-500 via-red-500 to-yellow-600 flex items-center justify-center shadow-2xl shadow-orange-500/30 animate-pulse">
               <Server className="w-12 h-12 text-white" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-1">Z-OS 3.0 Quantum</h2>
-            <p className="text-gray-500 text-xs mb-8">Initializing quantum kernel...</p>
+            <h2 className="text-2xl font-bold text-white mb-1">Ubuntu 24.04 LTS</h2>
+            <p className="text-gray-500 text-xs mb-8">Initializing Linux kernel...</p>
 
             {/* Phase indicators */}
             <div className="flex justify-center gap-2 mb-6">
@@ -587,7 +587,7 @@ export default function ZOSDesktop() {
 
             <Progress value={bootProgress} className="h-2 bg-[#1a2744]" />
             <div className="flex justify-between mt-2 text-[10px] text-gray-600">
-              <span>Quantum Kernel</span>
+              <span>Linux Kernel</span>
               <span>{bootProgress}%</span>
             </div>
           </div>
@@ -600,17 +600,17 @@ export default function ZOSDesktop() {
           {/* Top Bar */}
           <div className="bg-[#0d1321] border-b border-[#1a2744] px-3 py-1.5 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 via-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 via-red-500 to-yellow-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
                 <Server className="w-3.5 h-3.5 text-white" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
-                    Z-OS
+                    Ubuntu
                   </span>
-                  <span className="text-[9px] text-gray-500 font-mono">QUANTUM v3.0</span>
-                  <Badge variant="outline" className="text-[8px] border-cyan-700 text-cyan-400 h-3.5 px-1">
-                    PARANOID
+                  <span className="text-[9px] text-gray-500 font-mono">24.04 LTS</span>
+                  <Badge variant="outline" className="text-[8px] border-orange-700 text-orange-400 h-3.5 px-1">
+                    ROOT
                   </Badge>
                 </div>
                 <span className="text-[10px] text-gray-600 font-mono">{username}@{hostname}:{cwd}</span>
@@ -759,7 +759,7 @@ export default function ZOSDesktop() {
                           <p className="text-gray-500">غير متصل. أدخل بيانات الاعتماد للاتصال.</p>
                           <Button onClick={() => setShowAuthDialog(true)} variant="outline"
                             className="border-cyan-600 text-cyan-400 hover:bg-cyan-900/30">
-                            اتصال بـ Z-OS
+                            اتصال بـ Ubuntu
                           </Button>
                         </div>
                       </div>
@@ -826,16 +826,16 @@ export default function ZOSDesktop() {
               <div className="absolute inset-0 mx-2 sm:mx-4 mt-2 mb-4 bg-[#0d1321] rounded-xl border border-[#1a2744] overflow-auto p-4">
                 <h3 className="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
                   <FolderOpen className="w-4 h-4" />
-                  نظام الملفات Z-OS (ZFS)
+                  نظام الملفات Ubuntu (ext4)
                 </h3>
                 <div className="space-y-1 text-xs font-mono">
                   <div className="text-yellow-400 cursor-pointer hover:text-yellow-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('ls -la /'); handleCommand(); }, 100) }}>/</div>
                   <div className="pl-4 text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('ls -la /bin'); handleCommand(); }, 100) }}>bin/</div>
                   <div className="pl-4 text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('ls -la /etc'); handleCommand(); }, 100) }}>etc/</div>
                   <div className="pl-4 text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('ls -la /home'); handleCommand(); }, 100) }}>home/</div>
-                  <div className="pl-8 text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('ls -la /home/z-user'); handleCommand(); }, 100) }}>z-user/</div>
-                  <div className="pl-12 text-green-400 cursor-pointer hover:text-green-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('cat /home/z-user/.zshrc'); handleCommand(); }, 100) }}>.zshrc</div>
-                  <div className="pl-12 text-green-400 cursor-pointer hover:text-green-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('cat /home/z-user/welcome.txt'); handleCommand(); }, 100) }}>welcome.txt</div>
+                  <div className="pl-8 text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('ls -la /home/ubuntu'); handleCommand(); }, 100) }}>ubuntu/</div>
+                  <div className="pl-12 text-green-400 cursor-pointer hover:text-green-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('cat /home/ubuntu/.bashrc'); handleCommand(); }, 100) }}>.bashrc</div>
+                  <div className="pl-12 text-green-400 cursor-pointer hover:text-green-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('cat /home/ubuntu/welcome.txt'); handleCommand(); }, 100) }}>welcome.txt</div>
                   <div className="pl-8 text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('ls -la /var'); handleCommand(); }, 100) }}>var/</div>
                   <div className="pl-4 text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('ls -la /usr'); handleCommand(); }, 100) }}>usr/</div>
                   <div className="pl-4 text-gray-400 cursor-pointer hover:text-gray-300" onClick={() => { setActiveTab('terminal'); setTimeout(() => { setCurrentInput('tree /'); handleCommand(); }, 100) }}>...عرض الكل (tree /)</div>
@@ -873,12 +873,12 @@ export default function ZOSDesktop() {
                     <div className="space-y-1 text-xs text-gray-400">
                       <div>DNS-over-HTTPS: <span className="text-emerald-400">Enabled</span></div>
                       <div>DNSSEC: <span className="text-emerald-400">Validating</span></div>
-                      <div>VPN: <span className="text-yellow-400">Available (z-vpn)</span></div>
+                      <div>VPN: <span className="text-yellow-400">Not configured</span></div>
                     </div>
                   </div>
                 </div>
                 <div className="mt-3 text-[10px] text-gray-500">
-                  💡 استخدم <span className="text-cyan-400">znet status</span>, <span className="text-cyan-400">znet scan</span>, <span className="text-cyan-400">znet trace</span> في الطرفية للمزيد.
+                  💡 استخدم <span className="text-cyan-400">ip addr</span>, <span className="text-cyan-400">ss -tlnp</span>, <span className="text-cyan-400">ping</span> في الطرفية للمزيد.
                 </div>
               </div>
             )}
@@ -893,8 +893,8 @@ export default function ZOSDesktop() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
                   <div className="p-2 bg-emerald-900/20 border border-emerald-800/50 rounded-lg text-center">
                     <Shield className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
-                    <div className="text-[10px] text-emerald-400">PARANOID</div>
-                    <div className="text-[9px] text-gray-500">Security Level</div>
+                    <div className="text-[10px] text-emerald-400">UFW</div>
+                    <div className="text-[9px] text-gray-500">Firewall Status</div>
                   </div>
                   <div className="p-2 bg-emerald-900/20 border border-emerald-800/50 rounded-lg text-center">
                     <Lock className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
@@ -913,7 +913,7 @@ export default function ZOSDesktop() {
                   </div>
                 </div>
                 <div className="text-[10px] text-gray-500">
-                  💡 استخدم <span className="text-cyan-400">zsec scan</span> لفحص الثغرات، <span className="text-cyan-400">zsec harden</span> لتقوية الأمان، <span className="text-cyan-400">zfirewall status</span> لإدارة الجدار الناري.
+                  💡 استخدم <span className="text-cyan-400">ufw status</span> لفحص الثغرات، <span className="text-cyan-400">ufw enable</span> لتقوية الأمان، <span className="text-cyan-400">ufw status</span> لإدارة الجدار الناري.
                 </div>
               </div>
             )}
@@ -923,28 +923,28 @@ export default function ZOSDesktop() {
               <div className="absolute inset-0 mx-2 sm:mx-4 mt-2 mb-4 bg-[#0d1321] rounded-xl border border-[#1a2744] overflow-auto p-4">
                 <h3 className="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
                   <Package className="w-4 h-4" />
-                  مدير الحزم Z-PKG
+                  مدير الحزم APT
                 </h3>
                 <div className="space-y-1.5 text-xs font-mono">
                   {[
-                    { pkg: 'z-kernel', ver: '6.2.0-3', desc: 'Quantum Kernel', installed: true },
-                    { pkg: 'z-firewall', ver: '3.1.2', desc: 'AI-Powered Firewall', installed: true },
-                    { pkg: 'z-ai-detect', ver: '3.0.1', desc: 'AI Threat Detection', installed: true },
-                    { pkg: 'z-quantum-crypto', ver: '2.0.0', desc: 'Quantum-Resistant Crypto', installed: true },
-                    { pkg: 'nginx', ver: '1.27.0', desc: 'Web Server', installed: true },
-                    { pkg: 'z-monitor', ver: '2.5.0', desc: 'System Monitor', installed: true },
-                    { pkg: 'z-audit', ver: '4.0.0', desc: 'Security Audit Framework', installed: true },
-                    { pkg: 'z-desktop', ver: '3.0.0', desc: 'Quantum Desktop', installed: true },
-                    { pkg: 'python3', ver: '3.13.0', desc: 'Python Language', installed: true },
-                    { pkg: 'nodejs', ver: '22.0.0', desc: 'Node.js Runtime', installed: true },
-                    { pkg: 'gcc', ver: '14.1.0', desc: 'GNU Compiler', installed: true },
-                    { pkg: 'git', ver: '2.45.0', desc: 'Version Control', installed: true },
-                    { pkg: 'docker', ver: '26.1.0', desc: 'Container Runtime', installed: false },
-                    { pkg: 'z-vpn', ver: '1.2.0', desc: 'WireGuard VPN', installed: false },
-                    { pkg: 'postgresql', ver: '17.0', desc: 'Database Server', installed: false },
-                    { pkg: 'redis', ver: '8.0', desc: 'In-Memory Data Store', installed: false },
-                    { pkg: 'rust', ver: '1.78.0', desc: 'Rust Language', installed: false },
-                    { pkg: 'go', ver: '1.22.0', desc: 'Go Language', installed: false },
+                    { pkg: 'linux-image-generic', ver: '6.8.0-45', desc: 'Linux Kernel', installed: true },
+                    { pkg: 'bash', ver: '5.2.15', desc: 'GNU Shell', installed: true },
+                    { pkg: 'sudo', ver: '1.9.15', desc: 'Privilege Escalation', installed: true },
+                    { pkg: 'ufw', ver: '0.36.2', desc: 'Firewall', installed: true },
+                    { pkg: 'nginx', ver: '1.24.0', desc: 'Web Server', installed: true },
+                    { pkg: 'openssh-server', ver: '9.6p1', desc: 'SSH Server', installed: true },
+                    { pkg: 'curl', ver: '8.5.0', desc: 'HTTP Client', installed: true },
+                    { pkg: 'wget', ver: '1.21.4', desc: 'File Downloader', installed: true },
+                    { pkg: 'python3', ver: '3.12.3', desc: 'Python Language', installed: true },
+                    { pkg: 'nodejs', ver: '18.19.1', desc: 'Node.js Runtime', installed: true },
+                    { pkg: 'gcc', ver: '14-20240412', desc: 'GNU Compiler', installed: true },
+                    { pkg: 'git', ver: '2.43.0', desc: 'Version Control', installed: true },
+                    { pkg: 'docker.io', ver: '24.0.7', desc: 'Container Runtime', installed: false },
+                    { pkg: 'postgresql', ver: '16+257', desc: 'Database Server', installed: false },
+                    { pkg: 'redis-server', ver: '7.0.15', desc: 'In-Memory Data Store', installed: false },
+                    { pkg: 'rustc', ver: '1.75.0', desc: 'Rust Language', installed: false },
+                    { pkg: 'golang-go', ver: '1.22.2', desc: 'Go Language', installed: false },
+                    { pkg: 'xfce4', ver: '4.18', desc: 'XFCE Desktop', installed: false },
                   ].map((p, i) => (
                     <div key={i} className="flex items-center justify-between p-2 bg-[#0a0e17] rounded border border-[#1a2744]">
                       <div className="flex items-center gap-2">
@@ -959,7 +959,7 @@ export default function ZOSDesktop() {
                   ))}
                 </div>
                 <div className="mt-3 text-[10px] text-gray-500">
-                  💡 استخدم <span className="text-cyan-400">zpkg list</span>, <span className="text-cyan-400">zpkg install &lt;pkg&gt;</span>, <span className="text-cyan-400">zpkg update</span> في الطرفية.
+                  💡 استخدم <span className="text-cyan-400">apt list</span>, <span className="text-cyan-400">apt install &lt;pkg&gt;</span>, <span className="text-cyan-400">apt update</span> في الطرفية.
                 </div>
               </div>
             )}
@@ -1009,10 +1009,10 @@ export default function ZOSDesktop() {
                   <div className="p-2 bg-[#0a0e17] rounded border border-[#1a2744]">
                     <div className="text-[10px] text-cyan-400 uppercase tracking-wider mb-1">Services</div>
                     <div className="space-y-0.5 text-[10px]">
-                      <div className="flex justify-between text-emerald-400"><span>z-kernel-guard</span><span>Active</span></div>
-                      <div className="flex justify-between text-emerald-400"><span>z-firewall</span><span>Active</span></div>
-                      <div className="flex justify-between text-emerald-400"><span>z-ai-detect</span><span>Active</span></div>
-                      <div className="flex justify-between text-emerald-400"><span>z-quantum-crypto</span><span>Active</span></div>
+                      <div className="flex justify-between text-emerald-400"><span>ufw</span><span>Active</span></div>
+                      <div className="flex justify-between text-emerald-400"><span>sshd</span><span>Active</span></div>
+                      <div className="flex justify-between text-emerald-400"><span>nginx</span><span>Active</span></div>
+                      <div className="flex justify-between text-emerald-400"><span>cron</span><span>Active</span></div>
                       <div className="flex justify-between text-emerald-400"><span>nginx</span><span>Active</span></div>
                     </div>
                   </div>
@@ -1028,7 +1028,7 @@ export default function ZOSDesktop() {
                   </div>
                 </div>
                 <div className="mt-3 text-[10px] text-gray-500">
-                  💡 استخدم <span className="text-cyan-400">zperf</span> لأداء مفصل، <span className="text-cyan-400">zps</span> للعمليات، <span className="text-cyan-400">zservice list</span> للخدمات.
+                  💡 استخدم <span className="text-cyan-400">top</span> لأداء مفصل، <span className="text-cyan-400">ps aux</span> للعمليات، <span className="text-cyan-400">systemctl list-units</span> للخدمات.
                 </div>
               </div>
             )}
@@ -1038,13 +1038,13 @@ export default function ZOSDesktop() {
               <div className="absolute inset-0 mx-2 sm:mx-4 mt-2 mb-4 bg-[#0d1321] rounded-xl border border-[#1a2744] overflow-auto p-4">
                 <h3 className="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
                   <Server className="w-4 h-4" />
-                  إدارة الحاويات Z-Container
+                  إدارة الحاويات Docker
                 </h3>
                 <div className="space-y-2 text-xs font-mono">
                   {[
-                    { id: 'a1b2c3', image: 'z-os/nginx:latest', status: 'Up 2h', port: '80', name: 'web-server' },
-                    { id: 'f6e5d4', image: 'z-os/redis:latest', status: 'Up 2h', port: '6379', name: 'cache' },
-                    { id: '1a2b3c', image: 'z-os/node:22', status: 'Up 45m', port: '3000', name: 'app-server' },
+                    { id: 'a1b2c3', image: 'nginx:latest', status: 'Up 2h', port: '80', name: 'web-server' },
+                    { id: 'f6e5d4', image: 'redis:7', status: 'Up 2h', port: '6379', name: 'cache' },
+                    { id: '1a2b3c', image: 'node:18', status: 'Up 45m', port: '3000', name: 'app-server' },
                   ].map((c, i) => (
                     <div key={i} className="flex items-center justify-between p-2 bg-[#0a0e17] rounded border border-[#1a2744]">
                       <div className="flex items-center gap-2">
@@ -1061,7 +1061,7 @@ export default function ZOSDesktop() {
                   ))}
                 </div>
                 <div className="mt-3 text-[10px] text-gray-500">
-                  💡 استخدم <span className="text-cyan-400">zdocker ps</span>, <span className="text-cyan-400">zdocker images</span>, <span className="text-cyan-400">zdocker compose</span> في الطرفية.
+                  💡 استخدم <span className="text-cyan-400">docker ps</span>, <span className="text-cyan-400">docker images</span>, <span className="text-cyan-400">docker compose</span> في الطرفية.
                 </div>
               </div>
             )}
@@ -1085,13 +1085,13 @@ export default function ZOSDesktop() {
                   <div className="p-3 bg-[#0a0e17] rounded-lg border border-[#1a2744]">
                     <div className="text-[10px] text-purple-400 uppercase tracking-wider mb-2">حاويات قواعد البيانات المتاحة</div>
                     <div className="space-y-1 text-[10px] text-gray-400">
-                      <div className="flex items-center gap-2"><span className="text-yellow-400">○</span> PostgreSQL 17 — <span className="text-cyan-400">zpkg install postgresql</span></div>
-                      <div className="flex items-center gap-2"><span className="text-yellow-400">○</span> Redis 8 — <span className="text-cyan-400">zpkg install redis</span></div>
+                      <div className="flex items-center gap-2"><span className="text-yellow-400">○</span> PostgreSQL 17 — <span className="text-cyan-400">apt install postgresql</span></div>
+                      <div className="flex items-center gap-2"><span className="text-yellow-400">○</span> Redis 8 — <span className="text-cyan-400">apt install redis</span></div>
                     </div>
                   </div>
                 </div>
                 <div className="mt-3 text-[10px] text-gray-500">
-                  💡 أنشئ قاعدة بيانات محلية بـ <span className="text-cyan-400">zdb create mydb</span> أو ثبّت PostgreSQL بـ <span className="text-cyan-400">zpkg install postgresql</span>.
+                  💡 أنشئ قاعدة بيانات محلية بـ <span className="text-cyan-400">zdb create mydb</span> أو ثبّت PostgreSQL بـ <span className="text-cyan-400">apt install postgresql</span>.
                 </div>
               </div>
             )}
@@ -1103,16 +1103,16 @@ export default function ZOSDesktop() {
                 <div className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 px-1">أوامر سريعة</div>
                 {[
                   { label: 'System Info', cmd: 'zsysinfo', icon: '🖥️' },
-                  { label: 'Security Scan', cmd: 'zsec scan', icon: '🛡️' },
-                  { label: 'Harden System', cmd: 'zsec harden', icon: '🔒' },
+                  { label: 'Security Scan', cmd: 'ufw status', icon: '🛡️' },
+                  { label: 'Harden System', cmd: 'ufw enable', icon: '🔒' },
                   { label: 'AI Diagnose', cmd: 'zai diagnose', icon: '🤖' },
-                  { label: 'Performance', cmd: 'zperf', icon: '⚡' },
-                  { label: 'Network', cmd: 'znet status', icon: '🌐' },
-                  { label: 'Firewall', cmd: 'zfirewall status', icon: '🔥' },
-                  { label: 'Processes', cmd: 'zps', icon: '📊' },
+                  { label: 'Performance', cmd: 'top', icon: '⚡' },
+                  { label: 'Network', cmd: 'ip addr', icon: '🌐' },
+                  { label: 'Firewall', cmd: 'ufw status', icon: '🔥' },
+                  { label: 'Processes', cmd: 'ps aux', icon: '📊' },
                   { label: 'Benchmark', cmd: 'zbenchmark', icon: '🏆' },
-                  { label: 'Services', cmd: 'zservice list', icon: '⚙️' },
-                  { label: 'Packages', cmd: 'zpkg list', icon: '📦' },
+                  { label: 'Services', cmd: 'systemctl list-units', icon: '⚙️' },
+                  { label: 'Packages', cmd: 'apt list', icon: '📦' },
                   { label: 'Backup', cmd: 'zbackup list', icon: '💾' },
                   { label: 'ZFS Status', cmd: 'zfs list', icon: '💿' },
                   { label: 'System Log', cmd: 'zlog', icon: '📋' },
@@ -1144,7 +1144,7 @@ export default function ZOSDesktop() {
             <div className="flex items-center gap-3">
               <span className="text-emerald-400 flex items-center gap-1">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Z-Kernel
+                Ubuntu Linux
               </span>
               <span className="text-gray-500">{username}@{hostname}</span>
               <span className="text-gray-600">|</span>
@@ -1161,7 +1161,7 @@ export default function ZOSDesktop() {
                   <span>LOAD: <span className="text-amber-400">{metrics.loadAvg.join(' ')}</span></span>
                 </>
               )}
-              <span className="text-cyan-400">Z-OS 3.0 Quantum</span>
+              <span className="text-cyan-400">Ubuntu 24.04 LTS</span>
             </div>
           </div>
         </>

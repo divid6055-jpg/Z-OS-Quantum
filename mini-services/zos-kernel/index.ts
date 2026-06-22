@@ -15,7 +15,7 @@ const io = new Server(httpServer, {
 })
 
 // ═══════════════════════════════════════════════════════════
-// Z-OS KERNEL - Advanced Operating System Core
+// UBUNTU 24.04 LTS KERNEL - Linux Terminal Emulator
 // ═══════════════════════════════════════════════════════════
 
 interface Process {
@@ -42,9 +42,7 @@ interface FileSystemNode {
   content?: string
   target?: string
   children?: Map<string, FileSystemNode>
-  encrypted?: boolean
   compressed?: boolean
-  hash?: string
 }
 
 interface Service {
@@ -83,17 +81,6 @@ interface FirewallRule {
   logHits: number
 }
 
-interface Vulnerability {
-  id: string
-  severity: 'critical' | 'high' | 'medium' | 'low' | 'info'
-  title: string
-  description: string
-  affected: string
-  solution: string
-  cve?: string
-  status: 'open' | 'patched' | 'ignored'
-}
-
 interface Package {
   name: string
   version: string
@@ -120,10 +107,11 @@ interface Session {
   variables: Record<string, string>
   runningProcesses: Process[]
   lastActivity: Date
+  isRoot: boolean
 }
 
 // ═══════════════════════════════════════════════
-// Z-OS FILESYSTEM - Advanced Hierarchical FS
+// UBUNTU FILESYSTEM
 // ═══════════════════════════════════════════════
 
 function createFile(name: string, perms: string, owner: string, group: string, content: string = ''): FileSystemNode {
@@ -131,7 +119,6 @@ function createFile(name: string, perms: string, owner: string, group: string, c
     name, type: 'file', permissions: perms, owner, group,
     size: Buffer.byteLength(content, 'utf8'),
     modified: new Date(), content,
-    hash: hashContent(content),
   }
 }
 
@@ -153,32 +140,16 @@ function createSymlink(name: string, target: string, owner: string): FileSystemN
 
 function createDevice(name: string, perms: string, owner: string): FileSystemNode {
   return {
-    name, type: 'device', permissions: perms, owner, group: 'devices',
+    name, type: 'device', permissions: perms, owner, group: 'disk',
     size: 0, modified: new Date(),
   }
 }
 
-function hashContent(content: string): string {
-  let hash = 0
-  for (let i = 0; i < content.length; i++) {
-    const char = content.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash
-  }
-  return Math.abs(hash).toString(16).padStart(8, '0')
-}
-
-// Build the complete filesystem tree
+// Build the complete Ubuntu filesystem tree
 const rootFS = createDir('/', 'drwxr-xr-x', 'root', 'root', [
   // /bin - Essential binaries
   createDir('bin', 'drwxr-xr-x', 'root', 'root', [
-    createFile('zsh', '-rwxr-xr-x', 'root', 'root', '#!/bin/zsh\nZ-OS Shell v3.0'),
-    createFile('zpkg', '-rwxr-xr-x', 'root', 'root', '#!/bin/zsh\nZ-OS Package Manager'),
-    createFile('znet', '-rwxr-xr-x', 'root', 'root', '#!/bin/zsh\nZ-OS Network Manager'),
-    createFile('zsec', '-rwxr-xr-x', 'root', 'root', '#!/bin/zsh\nZ-OS Security Center'),
-    createFile('zmon', '-rwxr-xr-x', 'root', 'root', '#!/bin/zsh\nZ-OS System Monitor'),
-    createFile('zfs', '-rwxr-xr-x', 'root', 'root', '#!/bin/zsh\nZ-OS Filesystem Tool'),
-    createFile('bash', '-rwxr-xr-x', 'root', 'root', '#!/bin/bash\nBash compatibility layer'),
+    createFile('bash', '-rwxr-xr-x', 'root', 'root', '#!/bin/bash\nGNU Bash 5.2.21'),
     createFile('ls', '-rwxr-xr-x', 'root', 'root'),
     createFile('cat', '-rwxr-xr-x', 'root', 'root'),
     createFile('grep', '-rwxr-xr-x', 'root', 'root'),
@@ -207,83 +178,84 @@ const rootFS = createDir('/', 'drwxr-xr-x', 'root', 'root', [
     createFile('mkfs', '-rwx------', 'root', 'root'),
     createFile('mount', '-rwx------', 'root', 'root'),
     createFile('iptables', '-rwx------', 'root', 'root'),
-    createFile('zfirewall', '-rwx------', 'root', 'root'),
-    createFile('zaudit', '-rwx------', 'root', 'root'),
-    createFile('zscan', '-rwx------', 'root', 'root'),
+    createFile('ufw', '-rwx------', 'root', 'root'),
+    createFile('reboot', '-rwx------', 'root', 'root'),
+    createFile('shutdown', '-rwx------', 'root', 'root'),
   ]),
 
   // /etc - Configuration
   createDir('etc', 'drwxr-xr-x', 'root', 'root', [
-    createFile('z-os-release', '-rw-r--r--', 'root', 'root',
-      'NAME="Z-OS"\nVERSION="3.0.0 Quantum"\nID=zos\nBUILD=2026062201\nKERNEL=z-kernel-6.2.0\nARCH=x86_64\nPRETTY_NAME="Z-OS 3.0 Quantum"\nHOME_URL="https://z-os.cloud"\nBUG_REPORT_URL="https://z-os.cloud/bugs"\nLICENSE=ZPL-3.0'),
-    createFile('hostname', '-rw-r--r--', 'root', 'root', 'z-mainframe'),
-    createFile('hosts', '-rw-r--r--', 'root', 'root', '127.0.0.1\tlocalhost\n127.0.0.1\tz-mainframe\n::1\t\tlocalhost'),
-    createFile('passwd', '-rw-r--r--', 'root', 'root', 'root:x:0:0:root:/root:/bin/zsh\nz-user:x:1000:1000:Z-OS User:/home/z-user:/bin/zsh\nwww:x:33:33:Web Server:/var/www:/bin/nologin'),
-    createFile('shadow', '-rw-------', 'root', 'root', 'root:$6$rounds=65536$z$salt:19000:0:99999:7:::'),
-    createFile('fstab', '-rw-r--r--', 'root', 'root', '# Z-OS Filesystem Table\n/dev/zroot\t/\tzfs\tdefaults,compress=zstd\t0 0\n/dev/zroot/home\t/home\tzfs\tdefaults,compress=zstd\t0 0\ntmpfs\t/tmp\ttmpfs\tdefaults,size=2G\t0 0'),
-    createFile('resolv.conf', '-rw-r--r--', 'root', 'root', 'nameserver 1.1.1.1\nnameserver 8.8.8.8\nsearch z-os.local'),
-    createFile('zfirewall.conf', '-rw-------', 'root', 'root', '[DEFAULT]\npolicy=deny\nlog=enabled\nrate_limit=100/s\n'),
-    createDir('z-security', 'drwx------', 'root', 'root', [
-      createFile('audit.conf', '-rw-------', 'root', 'root', 'AUDIT_LEVEL=PARANOID\nLOG_RETENTION=365d\nALERT_EMAIL=admin@z-os.cloud\nAUTO_PATCH=enabled'),
-      createFile('encryption.conf', '-rw-------', 'root', 'root', 'DEFAULT_CIPHER=AES-256-GCM\nKEY_ROTATION=24h\nTLS_VERSION=1.3\nHSTS=enabled'),
-      createFile('hardening.conf', '-rw-------', 'root', 'root', 'ASLR=full\nNX=enabled\nSTACK_PROTECTOR=strong\nFORTIFY_SOURCE=2\nPIE=always\nRELRO=full\nSECCOMP=strict'),
-    ]),
-    createDir('z-network', 'drwxr-xr-x', 'root', 'root', [
-      createFile('interfaces', '-rw-r--r--', 'root', 'root', 'auto z0\niface z0 inet dhcp\n  hwaddress ether 00:1A:2B:3C:4D:5E'),
-      createFile('dns.conf', '-rw-r--r--', 'root', 'root', 'dns-over-https=enabled\ndnssec=validate\nfallback=9.9.9.9'),
+    createFile('os-release', '-rw-r--r--', 'root', 'root',
+      'NAME="Ubuntu"\nVERSION="24.04 LTS (Noble Numbat)"\nID=ubuntu\nID_LIKE=debian\nPRETTY_NAME="Ubuntu 24.04 LTS"\nVERSION_ID="24.04"\nHOME_URL="https://www.ubuntu.com/"\nSUPPORT_URL="https://help.ubuntu.com/"\nBUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"\nPRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"\nVERSION_CODENAME=noble\nUBUNTU_CODENAME=noble'),
+    createFile('hostname', '-rw-r--r--', 'root', 'root', 'ubuntu-server'),
+    createFile('hosts', '-rw-r--r--', 'root', 'root', '127.0.0.1\tlocalhost\n127.0.1.1\tubuntu-server\n::1\t\tlocalhost ip6-localhost ip6-loopback'),
+    createFile('passwd', '-rw-r--r--', 'root', 'root', 'root:x:0:0:root:/root:/bin/bash\nubuntu:x:1000:1000:Ubuntu User:/home/ubuntu:/bin/bash\nwww-data:x:33:33:Web Server:/var/www:/usr/sbin/nologin'),
+    createFile('shadow', '-rw-------', 'root', 'root', 'root:$6$rounds=65536$ub$salt:19000:0:99999:7:::'),
+    createFile('fstab', '-rw-r--r--', 'root', 'root', '# /etc/fstab: static file system information.\n#\n# <file system>  <mount point>  <type>  <options>       <dump>  <pass>\n/dev/sda1        /              ext4    defaults        0       1\ntmpfs            /tmp           tmpfs   defaults,size=2G 0       0'),
+    createFile('resolv.conf', '-rw-r--r--', 'root', 'root', 'nameserver 127.0.0.53\noptions edns0 trust-ad\nsearch localdomain'),
+    createDir('apt', 'drwxr-xr-x', 'root', 'root', [
+      createFile('sources.list', '-rw-r--r--', 'root', 'root', 'deb http://archive.ubuntu.com/ubuntu noble main restricted\ndeb http://archive.ubuntu.com/ubuntu noble-updates main restricted\ndeb http://archive.ubuntu.com/ubuntu noble universe\ndeb http://archive.ubuntu.com/ubuntu noble-security main restricted universe'),
     ]),
     createDir('nginx', 'drwxr-xr-x', 'root', 'root', [
       createFile('nginx.conf', '-rw-r--r--', 'root', 'root', 'worker_processes auto;\nevents { worker_connections 1024; }\nhttp { server { listen 80; } }'),
+    ]),
+    createDir('ssh', 'drwxr-xr-x', 'root', 'root', [
+      createFile('sshd_config', '-rw-r--r--', 'root', 'root', 'Port 22\nPermitRootLogin no\nPubkeyAuthentication yes\nPasswordAuthentication yes'),
+    ]),
+    createDir('ufw', 'drwxr-xr-x', 'root', 'root', [
+      createFile('user.rules', '-rw-------', 'root', 'root', '## RULES ##\n\n### tuple ### allow any 22 0.0.0.0/0 any 0.0.0.0/0\n### tuple ### allow any 80 0.0.0.0/0 any 0.0.0.0/0\n### tuple ### allow any 443 0.0.0.0/0 any 0.0.0.0/0'),
     ]),
   ]),
 
   // /home - User directories
   createDir('home', 'drwxr-xr-x', 'root', 'root', [
-    createDir('z-user', 'drwxr-xr-x', 'z-user', 'z-user', [
-      createFile('.zshrc', '-rw-r--r--', 'z-user', 'z-user',
-        '# Z-OS Shell Configuration\nexport SHELL=/bin/zsh\nexport TERM=xterm-256color\nexport EDITOR=nano\nexport LANG=en_US.UTF-8\n\n# Z-OS Aliases\nalias ll="ls -lah --color=auto"\nalias la="ls -A --color=auto"\nalias cls="clear"\nalias update="zpkg update && zpkg upgrade"\nalias scan="zsec scan --full"\nalias mon="zmon --realtime"\nalias net="znet status"\nalias firewall="zfirewall status"\n\n# Z-Script Functions\nzinfo() {\n  echo "Z-OS $(cat /etc/z-os-release | grep VERSION | cut -d= -f2)"\n  echo "Kernel: $(uname -r)"\n  echo "Uptime: $(uptime -p)"\n}\n\n# Prompt\nPS1="\\[\\e[1;32m\\]\\u@\\h\\[\\e[0m\\]:\\[\\e[1;34m\\]\\w\\[\\e[0m\\]\\$ "'),
-      createFile('.zprofile', '-rw-r--r--', 'z-user', 'z-user', '# Z-OS Profile\nsource ~/.zshrc'),
-      createFile('.zhistory', '-rw-------', 'z-user', 'z-user', ''),
-      createFile('welcome.txt', '-rw-r--r--', 'z-user', 'z-user',
-        '╔═══════════════════════════════════════════════════════╗\n║  Welcome to Z-OS 3.0 Quantum - The Future of Computing ║\n║                                                       ║\n║  Type "help" for commands, "ztour" for a guided tour  ║\n║  Type "zsec scan" to run a security audit             ║\n╚═══════════════════════════════════════════════════════╝'),
-      createDir('documents', 'drwxr-xr-x', 'z-user', 'z-user', [
-        createFile('readme.md', '-rw-r--r--', 'z-user', 'z-user', '# Z-OS Documentation\n\nZ-OS is a next-generation operating system built from the ground up.\n\n## Features\n- Quantum-resistant encryption\n- AI-powered threat detection\n- Zero-trust architecture\n- Self-healing filesystem\n- Real-time security auditing'),
-        createFile('notes.txt', '-rw-r--r--', 'z-user', 'z-user', 'Meeting notes - Project Z-OS\n- Review security scan results\n- Update firewall rules\n- Deploy new services'),
+    createDir('ubuntu', 'drwxr-xr-x', 'ubuntu', 'ubuntu', [
+      createFile('.bashrc', '-rw-r--r--', 'ubuntu', 'ubuntu',
+        '# ~/.bashrc: executed by bash(1) for non-login shells.\nexport SHELL=/bin/bash\nexport TERM=xterm-256color\nexport EDITOR=nano\nexport LANG=en_US.UTF-8\n\n# Aliases\nalias ll="ls -lah --color=auto"\nalias la="ls -A --color=auto"\nalias cls="clear"\nalias update="sudo apt update && sudo apt upgrade"\nalias ..="cd .."\nalias ...="cd ../.."\n\n# Prompt\nif [ "$(id -u)" -eq 0 ]; then\n  PS1="\\[\\e[1;31m\\]\\u@\\h\\[\\e[0m\\]:\\[\\e[1;34m\\]\\w\\[\\e[0m\\]# "\nelse\n  PS1="\\[\\e[1;32m\\]\\u@\\h\\[\\e[0m\\]:\\[\\e[1;34m\\]\\w\\[\\e[0m\\]\\$ "\nfi'),
+      createFile('.profile', '-rw-r--r--', 'ubuntu', 'ubuntu', '# ~/.profile: executed by the command interpreter for login shells.\nif [ -f ~/.bashrc ]; then\n  . ~/.bashrc\nfi'),
+      createFile('.bash_history', '-rw-------', 'ubuntu', 'ubuntu', ''),
+      createFile('welcome.txt', '-rw-r--r--', 'ubuntu', 'ubuntu',
+        'Welcome to Ubuntu 24.04 LTS (GNU/Linux 6.8.0-45-generic x86_64)\n\n * Documentation:  https://help.ubuntu.com\n * Management:     https://landscape.canonical.com\n * Support:        https://ubuntu.com/pro\n\nSystem information as of ' + new Date().toLocaleDateString() + '\n\n  System load:  0.12               Processes:           142\n  Usage of /:   14.2% of 63.89GB   Users logged in:     1\n  Memory usage: 51%                IPv4 address eth0:   10.0.0.1\n  Swap usage:   0%                 IPv4 address lo:     127.0.0.1\n\nLast login: ' + new Date().toLocaleString()),
+      createDir('documents', 'drwxr-xr-x', 'ubuntu', 'ubuntu', [
+        createFile('readme.md', '-rw-r--r--', 'ubuntu', 'ubuntu', '# Ubuntu Server Documentation\n\nUbuntu 24.04 LTS (Noble Numbat)\n\n## Features\n- Long Term Support until 2029\n- Linux kernel 6.8\n- Enhanced security with AppArmor\n- Cloud-init support\n- snap and apt package managers'),
+        createFile('notes.txt', '-rw-r--r--', 'ubuntu', 'ubuntu', 'Meeting notes - Server Setup\n- Install nginx\n- Configure firewall rules\n- Set up Docker containers'),
       ]),
-      createDir('projects', 'drwxr-xr-x', 'z-user', 'z-user', [
-        createDir('web-app', 'drwxr-xr-x', 'z-user', 'z-user', [
-          createFile('index.html', '-rw-r--r--', 'z-user', 'z-user', '<!DOCTYPE html>\n<html><head><title>Z-OS App</title></head>\n<body><h1>Hello from Z-OS</h1></body></html>'),
-          createFile('style.css', '-rw-r--r--', 'z-user', 'z-user', 'body { font-family: "Z-Font", sans-serif; margin: 0; }'),
-          createFile('app.js', '-rw-r--r--', 'z-user', 'z-user', 'const app = {\n  name: "Z-OS Web App",\n  version: "1.0.0"\n};'),
+      createDir('projects', 'drwxr-xr-x', 'ubuntu', 'ubuntu', [
+        createDir('web-app', 'drwxr-xr-x', 'ubuntu', 'ubuntu', [
+          createFile('index.html', '-rw-r--r--', 'ubuntu', 'ubuntu', '<!DOCTYPE html>\n<html><head><title>My App</title></head>\n<body><h1>Hello from Ubuntu</h1></body></html>'),
+          createFile('style.css', '-rw-r--r--', 'ubuntu', 'ubuntu', 'body { font-family: sans-serif; margin: 0; }'),
+          createFile('app.js', '-rw-r--r--', 'ubuntu', 'ubuntu', 'const app = {\n  name: "Web App",\n  version: "1.0.0"\n};'),
         ]),
-        createDir('scripts', 'drwxr-xr-x', 'z-user', 'z-user', [
-          createFile('backup.zs', '-rwxr-xr-x', 'z-user', 'z-user', '#!/bin/zsh\n# Z-Script: Automated Backup\necho "Starting Z-OS backup..."\nzfs snapshot zroot/home@backup-$(date +%Y%m%d)\necho "Backup complete!"'),
-          createFile('monitor.zs', '-rwxr-xr-x', 'z-user', 'z-user', '#!/bin/zsh\n# Z-Script: System Monitor\nwhile true; do\n  clear\n  zmon --snapshot\n  sleep 5\ndone'),
+        createDir('scripts', 'drwxr-xr-x', 'ubuntu', 'ubuntu', [
+          createFile('backup.sh', '-rwxr-xr-x', 'ubuntu', 'ubuntu', '#!/bin/bash\n# Automated Backup\necho "Starting backup..."\ntar czf /tmp/backup-$(date +%Y%m%d).tar.gz /home/ubuntu\necho "Backup complete!"'),
+          createFile('monitor.sh', '-rwxr-xr-x', 'ubuntu', 'ubuntu', '#!/bin/bash\n# System Monitor\nwhile true; do\n  clear\n  top -bn1 | head -20\n  sleep 5\ndone'),
         ]),
       ]),
-      createDir('downloads', 'drwxr-xr-x', 'z-user', 'z-user', []),
-      createDir('.ssh', 'drwx------', 'z-user', 'z-user', [
-        createFile('id_ed25519.pub', '-rw-r--r--', 'z-user', 'z-user', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI z-user@z-mainframe'),
-        createFile('authorized_keys', '-rw-------', 'z-user', 'z-user', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI z-user@z-mainframe'),
-        createFile('config', '-rw-------', 'z-user', 'z-user', 'Host *\n  AddKeysToAgent yes\n  IdentityFile ~/.ssh/id_ed25519'),
+      createDir('downloads', 'drwxr-xr-x', 'ubuntu', 'ubuntu', []),
+      createDir('.ssh', 'drwx------', 'ubuntu', 'ubuntu', [
+        createFile('id_ed25519.pub', '-rw-r--r--', 'ubuntu', 'ubuntu', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI ubuntu@ubuntu-server'),
+        createFile('authorized_keys', '-rw-------', 'ubuntu', 'ubuntu', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI ubuntu@ubuntu-server'),
+        createFile('config', '-rw-------', 'ubuntu', 'ubuntu', 'Host *\n  AddKeysToAgent yes\n  IdentityFile ~/.ssh/id_ed25519'),
       ]),
-      createDir('.config', 'drwxr-xr-x', 'z-user', 'z-user', []),
+      createDir('.config', 'drwxr-xr-x', 'ubuntu', 'ubuntu', []),
     ]),
   ]),
 
   // /var - Variable data
   createDir('var', 'drwxr-xr-x', 'root', 'root', [
     createDir('log', 'drwxr-xr-x', 'root', 'root', [
-      createFile('syslog', '-rw-r-----', 'root', 'root', ''),
-      createFile('auth.log', '-rw-r-----', 'root', 'root', ''),
-      createFile('zfirewall.log', '-rw-r-----', 'root', 'root', ''),
-      createFile('zaudit.log', '-rw-------', 'root', 'root', ''),
+      createFile('syslog', '-rw-r-----', 'syslog', 'adm', ''),
+      createFile('auth.log', '-rw-r-----', 'syslog', 'adm', ''),
+      createFile('kern.log', '-rw-r-----', 'syslog', 'adm', ''),
+      createFile('dpkg.log', '-rw-r--r--', 'root', 'root', ''),
     ]),
-    createDir('www', 'drwxr-xr-x', 'www', 'www', [
-      createFile('index.html', '-rw-r--r--', 'www', 'www', '<h1>Welcome to Z-OS Web Server</h1>'),
+    createDir('www', 'drwxr-xr-x', 'www-data', 'www-data', [
+      createFile('index.html', '-rw-r--r--', 'www-data', 'www-data', '<h1>Welcome to nginx on Ubuntu!</h1>'),
     ]),
     createDir('lib', 'drwxr-xr-x', 'root', 'root', []),
-    createDir('cache', 'drwx------', 'root', 'root', []),
+    createDir('cache', 'drwx------', 'root', 'root', [
+      createDir('apt', 'drwxr-xr-x', 'root', 'root', []),
+    ]),
     createDir('tmp', 'drwxrwxrwt', 'root', 'root', []),
   ]),
 
@@ -292,9 +264,7 @@ const rootFS = createDir('/', 'drwxr-xr-x', 'root', 'root', [
     createDir('bin', 'drwxr-xr-x', 'root', 'root', []),
     createDir('lib', 'drwxr-xr-x', 'root', 'root', []),
     createDir('share', 'drwxr-xr-x', 'root', 'root', [
-      createDir('z-os', 'drwxr-xr-x', 'root', 'root', [
-        createFile('themes.json', '-rw-r--r--', 'root', 'root', '{"theme": "quantum-dark"}'),
-      ]),
+      createDir('ubuntu', 'drwxr-xr-x', 'root', 'root', []),
     ]),
     createDir('local', 'drwxr-xr-x', 'root', 'root', [
       createDir('bin', 'drwxr-xr-x', 'root', 'root', []),
@@ -305,11 +275,7 @@ const rootFS = createDir('/', 'drwxr-xr-x', 'root', 'root', [
   createDir('tmp', 'drwxrwxrwt', 'root', 'root', []),
 
   // /opt - Optional
-  createDir('opt', 'drwxr-xr-x', 'root', 'root', [
-    createDir('z-ai', 'drwxr-xr-x', 'root', 'root', [
-      createFile('model.conf', '-rw-r--r--', 'root', 'root', 'model=z-llm-7b\ncontext=8192\nquantization=int4'),
-    ]),
-  ]),
+  createDir('opt', 'drwxr-xr-x', 'root', 'root', []),
 
   // /dev - Devices
   createDir('dev', 'drwxr-xr-x', 'root', 'root', [
@@ -317,37 +283,37 @@ const rootFS = createDir('/', 'drwxr-xr-x', 'root', 'root', [
     createDevice('zero', 'crw-rw-rw-', 'root'),
     createDevice('random', 'crw-rw-rw-', 'root'),
     createDevice('urandom', 'crw-rw-rw-', 'root'),
-    createDevice('zroot', 'brw-rw----', 'root'),
+    createDevice('sda1', 'brw-rw----', 'root'),
     createDevice('tty0', 'crw--w----', 'root'),
     createDevice('console', 'crw-------', 'root'),
   ]),
 
   // /proc - Process info (virtual)
   createDir('proc', 'dr-xr-xr-x', 'root', 'root', [
-    createFile('cpuinfo', '-r--r--r--', 'root', 'root', 'processor\t: 0\nmodel name\t: Z-Quantum vCPU @ 4.2GHz\ncpu cores\t: 4\ncache size\t: 16384 KB\nflags\t\t: avx avx2 avx512 quantum sse4_2 aes-ni'),
+    createFile('cpuinfo', '-r--r--r--', 'root', 'root', 'processor\t: 0\nvendor_id\t: GenuineIntel\nmodel name\t: Intel(R) Xeon(R) CPU @ 2.80GHz\ncpu cores\t: 4\ncache size\t: 16384 KB\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx rdtscp lm avx avx2 aes-ni'),
     createFile('meminfo', '-r--r--r--', 'root', 'root', 'MemTotal:       16777216 kB\nMemFree:         8388608 kB\nMemAvailable:   12582912 kB\nBuffers:          524288 kB\nCached:          2097152 kB\nSwapTotal:       8388608 kB\nSwapFree:        8388608 kB'),
-    createFile('version', '-r--r--r--', 'root', 'root', 'Z-OS version 6.2.0-z-quantum (gcc version 14.1.0) #1 SMP PREEMPT_DYNAMIC'),
+    createFile('version', '-r--r--r--', 'root', 'root', 'Linux version 6.8.0-45-generic (buildd@lcy02-amd64-051) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.2.0-23ubuntu4) 13.2.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #45-Ubuntu SMP x86_64'),
     createFile('uptime', '-r--r--r--', 'root', 'root', `${Math.floor(process.uptime())} ${process.uptime() * 100}`),
   ]),
 
   // /sys - System info (virtual)
   createDir('sys', 'dr-xr-xr-x', 'root', 'root', [
     createDir('kernel', 'dr-xr-xr-x', 'root', 'root', [
-      createFile('version', '-r--r--r--', 'root', 'root', '6.2.0-z-quantum'),
+      createFile('version', '-r--r--r--', 'root', 'root', '6.8.0-45-generic'),
     ]),
   ]),
 
   // /root - Root home
   createDir('root', 'drwx------', 'root', 'root', [
-    createFile('.zshrc', '-rw-r--r--', 'root', 'root', '# Root shell config\nPS1="\\[\\e[1;31m\\]root@\\h\\[\\e[0m\\]:\\[\\e[1;34m\\]\\w\\[\\e[0m\\]# "'),
+    createFile('.bashrc', '-rw-r--r--', 'root', 'root', '# Root shell config\nPS1="\\[\\e[1;31m\\]root@\\h\\[\\e[0m\\]:\\[\\e[1;34m\\]\\w\\[\\e[0m\\]# "'),
   ]),
 
   // /boot - Boot files
   createDir('boot', 'drwxr-xr-x', 'root', 'root', [
-    createFile('vmlinuz-6.2.0-z-quantum', '-rw-r--r--', 'root', 'root', '[kernel binary]'),
-    createFile('initramfs-z.img', '-rw-r--r--', 'root', 'root', '[initramfs image]'),
+    createFile('vmlinuz-6.8.0-45-generic', '-rw-r--r--', 'root', 'root', '[kernel binary]'),
+    createFile('initrd.img-6.8.0-45-generic', '-rw-r--r--', 'root', 'root', '[initramfs image]'),
     createDir('grub', 'drwxr-xr-x', 'root', 'root', [
-      createFile('grub.cfg', '-rw-------', 'root', 'root', 'menuentry "Z-OS Quantum" {\n  linux /boot/vmlinuz-6.2.0-z-quantum root=/dev/zroot\n  initrd /boot/initramfs-z.img\n}'),
+      createFile('grub.cfg', '-rw-------', 'root', 'root', 'menuentry "Ubuntu 24.04 LTS" {\n  linux /boot/vmlinuz-6.8.0-45-generic root=/dev/sda1\n  initrd /boot/initrd.img-6.8.0-45-generic\n}'),
     ]),
   ]),
 
@@ -356,40 +322,36 @@ const rootFS = createDir('/', 'drwxr-xr-x', 'root', 'root', [
 ])
 
 // ═══════════════════════════════════════════
-// Z-OS SERVICES - System Daemons
+// UBUNTU SERVICES
 // ═══════════════════════════════════════════
 
 const systemServices: Service[] = [
-  { name: 'z-init', status: 'active', type: 'system', pid: 1, uptime: 0, description: 'Z-OS Init System - Process Manager', autoStart: true, dependencies: [], log: ['Started successfully', 'All services loaded'] },
-  { name: 'z-kernel-guard', status: 'active', type: 'security', pid: 2, uptime: 0, description: 'Kernel-level intrusion detection & prevention', autoStart: true, dependencies: ['z-init'], log: ['Monitoring kernel syscalls', '0 threats detected'] },
-  { name: 'z-firewall', status: 'active', type: 'security', pid: 3, uptime: 0, description: 'Next-gen AI-powered Firewall', autoStart: true, dependencies: ['z-init'], log: ['Firewall rules loaded: 247 active', 'Blocking 12 suspicious IPs'] },
-  { name: 'z-netmanager', status: 'active', type: 'network', pid: 4, uptime: 0, description: 'Network Connection Manager', autoStart: true, dependencies: ['z-init'], log: ['Interface z0: connected', 'DNS-over-HTTPS: active'] },
-  { name: 'z-auditd', status: 'active', type: 'security', pid: 5, uptime: 0, description: 'Real-time Security Audit Daemon', autoStart: true, dependencies: ['z-kernel-guard'], log: ['Audit level: PARANOID', 'Logging all privileged operations'] },
-  { name: 'z-quantum-crypto', status: 'active', type: 'security', pid: 6, uptime: 0, description: 'Quantum-resistant Encryption Service', autoStart: true, dependencies: ['z-init'], log: ['AES-256-GCM active', 'Key rotation in 24h', 'TLS 1.3 enforced'] },
-  { name: 'z-ai-detect', status: 'active', type: 'security', pid: 7, uptime: 0, description: 'AI-Powered Threat Detection Engine', autoStart: true, dependencies: ['z-kernel-guard', 'z-firewall'], log: ['AI model: z-threat-v3 loaded', 'Scanning network patterns', 'Anomaly detection: active'] },
-  { name: 'z-fs-monitor', status: 'active', type: 'system', pid: 8, uptime: 0, description: 'Self-healing Filesystem Monitor', autoStart: true, dependencies: ['z-init'], log: ['ZFS scrub: healthy', 'No filesystem errors'] },
-  { name: 'z-scheduler', status: 'active', type: 'system', pid: 9, uptime: 0, description: 'Quantum Process Scheduler', autoStart: true, dependencies: ['z-init'], log: ['CPU scheduling: real-time priority', 'Load balancing: optimal'] },
-  { name: 'nginx', status: 'active', type: 'network', port: 80, pid: 10, uptime: 0, description: 'Web Server (NGINX)', autoStart: true, dependencies: ['z-netmanager'], log: ['Listening on port 80', 'Serving /var/www'] },
-  { name: 'sshd', status: 'active', type: 'network', port: 22, pid: 11, uptime: 0, description: 'Secure Shell Server', autoStart: true, dependencies: ['z-netmanager', 'z-quantum-crypto'], log: ['Listening on port 22', 'Ed25519 keys only'] },
-  { name: 'z-packagekit', status: 'active', type: 'system', pid: 12, uptime: 0, description: 'Package Management Daemon', autoStart: true, dependencies: ['z-init'], log: ['Repository: z-os-quantum', 'Packages available: 42,000+'] },
-  { name: 'docker', status: 'inactive', type: 'system', pid: 0, uptime: 0, description: 'Container Runtime', autoStart: false, dependencies: ['z-init'], log: ['Not started'] },
-  { name: 'z-vpn', status: 'inactive', type: 'network', port: 1194, pid: 0, uptime: 0, description: 'WireGuard VPN Service', autoStart: false, dependencies: ['z-netmanager'], log: ['Not started'] },
-  { name: 'z-tor', status: 'inactive', type: 'network', port: 9050, pid: 0, uptime: 0, description: 'Tor Anonymity Network', autoStart: false, dependencies: ['z-netmanager'], log: ['Not started'] },
+  { name: 'systemd', status: 'active', type: 'system', pid: 1, uptime: 0, description: 'System and Service Manager', autoStart: true, dependencies: [], log: ['Started successfully', 'All services loaded'] },
+  { name: 'ufw', status: 'active', type: 'security', pid: 234, uptime: 0, description: 'Uncomplicated Firewall', autoStart: true, dependencies: ['systemd'], log: ['Firewall rules loaded', 'Status: active'] },
+  { name: 'NetworkManager', status: 'active', type: 'network', pid: 456, uptime: 0, description: 'Network Connection Manager', autoStart: true, dependencies: ['systemd'], log: ['Interface eth0: connected', 'DNS: 127.0.0.53'] },
+  { name: 'sshd', status: 'active', type: 'network', port: 22, pid: 567, uptime: 0, description: 'OpenSSH Server', autoStart: true, dependencies: ['NetworkManager'], log: ['Listening on port 22', 'Ed25519 keys supported'] },
+  { name: 'nginx', status: 'active', type: 'network', port: 80, pid: 890, uptime: 0, description: 'Web Server (NGINX)', autoStart: true, dependencies: ['NetworkManager'], log: ['Listening on port 80', 'Serving /var/www'] },
+  { name: 'cron', status: 'active', type: 'system', pid: 345, uptime: 0, description: 'Regular background program processing', autoStart: true, dependencies: ['systemd'], log: ['Cron daemon running'] },
+  { name: 'rsyslog', status: 'active', type: 'system', pid: 210, uptime: 0, description: 'System Logging Service', autoStart: true, dependencies: ['systemd'], log: ['Logging to /var/log/syslog'] },
+  { name: 'snapd', status: 'active', type: 'system', pid: 678, uptime: 0, description: 'Snap Daemon', autoStart: true, dependencies: ['systemd'], log: ['snapd running', 'Auto-refresh enabled'] },
+  { name: 'dbus', status: 'active', type: 'system', pid: 123, uptime: 0, description: 'D-Bus System Message Bus', autoStart: true, dependencies: ['systemd'], log: ['D-Bus daemon running'] },
+  { name: 'accounts-daemon', status: 'active', type: 'system', pid: 432, uptime: 0, description: 'Accounts Service', autoStart: true, dependencies: ['dbus'], log: ['Accounts service running'] },
+  { name: 'docker', status: 'inactive', type: 'system', pid: 0, uptime: 0, description: 'Docker Application Container Engine', autoStart: false, dependencies: ['systemd'], log: ['Not started'] },
+  { name: 'postgresql', status: 'inactive', type: 'system', pid: 0, uptime: 0, description: 'PostgreSQL RDBMS', autoStart: false, dependencies: ['systemd'], log: ['Not started'] },
+  { name: 'mysql', status: 'inactive', type: 'system', pid: 0, uptime: 0, description: 'MySQL Community Server', autoStart: false, dependencies: ['systemd'], log: ['Not started'] },
 ]
 
 // ═══════════════════════════════════════════
-// Z-OS NETWORK INTERFACES
+// UBUNTU NETWORK INTERFACES
 // ═══════════════════════════════════════════
 
 const networkInterfaces: NetworkInterface[] = [
-  { name: 'z0', ip: '10.0.0.1', mac: '00:1A:2B:3C:4D:5E', status: 'up', speed: '10 Gbps', rxBytes: 1073741824, txBytes: 536870912, type: 'ethernet' },
-  { name: 'z-wifi0', ip: '192.168.1.100', mac: '00:1A:2B:3C:4D:5F', status: 'up', speed: '1.2 Gbps', rxBytes: 524288000, txBytes: 262144000, type: 'wifi' },
+  { name: 'eth0', ip: '10.0.0.1', mac: '00:1A:2B:3C:4D:5E', status: 'up', speed: '1 Gbps', rxBytes: 1073741824, txBytes: 536870912, type: 'ethernet' },
   { name: 'lo', ip: '127.0.0.1', mac: '00:00:00:00:00:00', status: 'up', speed: '∞', rxBytes: 1048576, txBytes: 1048576, type: 'loopback' },
-  { name: 'z-vpn0', ip: '10.8.0.1', mac: '00:1A:2B:3C:4D:60', status: 'down', speed: '1 Gbps', rxBytes: 0, txBytes: 0, type: 'vpn' },
 ]
 
 // ═══════════════════════════════════════════
-// Z-OS FIREWALL RULES
+// UFW FIREWALL RULES
 // ═══════════════════════════════════════════
 
 const firewallRules: FirewallRule[] = [
@@ -397,55 +359,120 @@ const firewallRules: FirewallRule[] = [
   { id: 'fw002', action: 'allow', direction: 'in', protocol: 'tcp', source: '0.0.0.0/0', destination: '0.0.0.0/0', port: '80', enabled: true, logHits: 8923 },
   { id: 'fw003', action: 'allow', direction: 'in', protocol: 'tcp', source: '0.0.0.0/0', destination: '0.0.0.0/0', port: '443', enabled: true, logHits: 15640 },
   { id: 'fw004', action: 'deny', direction: 'in', protocol: 'all', source: '0.0.0.0/0', destination: '0.0.0.0/0', port: '*', enabled: true, logHits: 45230 },
-  { id: 'fw005', action: 'deny', direction: 'in', protocol: 'tcp', source: '185.220.101.0/24', destination: '0.0.0.0/0', port: '*', enabled: true, logHits: 892 },
-  { id: 'fw006', action: 'deny', direction: 'in', protocol: 'tcp', source: '45.33.32.0/24', destination: '0.0.0.0/0', port: '*', enabled: true, logHits: 445 },
-  { id: 'fw007', action: 'allow', direction: 'out', protocol: 'all', source: '0.0.0.0/0', destination: '0.0.0.0/0', port: '*', enabled: true, logHits: 23451 },
-  { id: 'fw008', action: 'deny', direction: 'out', protocol: 'tcp', source: '0.0.0.0/0', destination: '0.0.0.0/0', port: '25', enabled: true, logHits: 23 },
-  { id: 'fw009', action: 'allow', direction: 'in', protocol: 'icmp', source: '0.0.0.0/0', destination: '0.0.0.0/0', port: '*', enabled: false, logHits: 0 },
-  { id: 'fw010', action: 'redirect', direction: 'in', protocol: 'tcp', source: '0.0.0.0/0', destination: '0.0.0.0/0', port: '8080', enabled: true, logHits: 156 },
 ]
 
 // ═══════════════════════════════════════════
-// Z-OS VULNERABILITY DATABASE
-// ═══════════════════════════════════════════
-
-const vulnerabilityDB: Vulnerability[] = [
-  { id: 'ZVE-2026-001', severity: 'critical', title: 'Kernel Privilege Escalation via Z-Syscall', description: 'A flaw in z_syscall_handler allows unprivileged users to execute arbitrary kernel code through crafted syscall sequences', affected: 'z-kernel < 6.2.0-3', solution: 'Update to z-kernel 6.2.0-3 or later', cve: 'CVE-2026-1234', status: 'patched' },
-  { id: 'ZVE-2026-002', severity: 'high', title: 'ZFS Buffer Overflow in Snapshot Handler', description: 'A buffer overflow in zfs_snapshot_create() can lead to kernel panic or privilege escalation when processing specially crafted snapshot names', affected: 'zfs-utils < 2.3.1', solution: 'Update zfs-utils to 2.3.1', cve: 'CVE-2026-1235', status: 'open' },
-  { id: 'ZVE-2026-003', severity: 'high', title: 'SSH Key Confusion Attack', description: 'Improper validation of Ed25519 keys allows authentication bypass when multiple keys are presented', affected: 'z-openssh < 9.8p1', solution: 'Update to z-openssh 9.8p1', cve: 'CVE-2026-1236', status: 'patched' },
-  { id: 'ZVE-2026-004', severity: 'medium', title: 'Z-Firewall Rule Bypass via Fragmented Packets', description: 'Specially crafted IPv4 fragments can bypass certain firewall rules when reassembly is delayed', affected: 'z-firewall < 3.1.2', solution: 'Update z-firewall and enable strict reassembly', status: 'open' },
-  { id: 'ZVE-2026-005', severity: 'medium', title: 'Information Leak in /proc/z-status', description: 'Kernel pointer values are exposed in /proc/z-status, potentially aiding kernel exploit development', affected: 'z-kernel < 6.2.0-2', solution: 'Enable kptr_restrict=2 in sysctl', status: 'patched' },
-  { id: 'ZVE-2026-006', severity: 'low', title: 'Weak Default Cipher in Z-VPN', description: 'Z-VPN defaults to ChaCha20-Poly1305 instead of AES-256-GCM when hardware acceleration is unavailable', affected: 'z-vpn < 1.2.0', solution: 'Configure preferred cipher in /etc/z-network/vpn.conf', status: 'open' },
-  { id: 'ZVE-2026-007', severity: 'critical', title: 'Z-Package Signature Verification Bypass', description: 'A race condition in zpkg allows installation of unsigned packages when signature verification is performed asynchronously', affected: 'zpkg < 5.0.3', solution: 'Update zpkg to 5.0.3 which enforces synchronous verification', cve: 'CVE-2026-1237', status: 'open' },
-  { id: 'ZVE-2026-008', severity: 'info', title: 'Default SSH Banner Exposes Version', description: 'The default SSH banner reveals exact software version information', affected: 'z-openssh all versions', solution: 'Configure Banner none in sshd_config', status: 'ignored' },
-]
-
-// ═══════════════════════════════════════════
-// Z-OS PACKAGE REPOSITORY
+// UBUNTU PACKAGE DATABASE
 // ═══════════════════════════════════════════
 
 const packageDB: Package[] = [
-  { name: 'z-kernel', version: '6.2.0-3', description: 'Z-OS Quantum Kernel', size: '128 MB', category: 'system', installed: true, dependencies: [], repository: 'z-os-core' },
-  { name: 'z-firewall', version: '3.1.2', description: 'AI-Powered Next-Gen Firewall', size: '24 MB', category: 'security', installed: true, dependencies: ['z-kernel'], repository: 'z-os-security' },
-  { name: 'z-ai-detect', version: '3.0.1', description: 'AI Threat Detection Engine', size: '256 MB', category: 'security', installed: true, dependencies: ['z-kernel', 'z-firewall'], repository: 'z-os-security' },
-  { name: 'z-quantum-crypto', version: '2.0.0', description: 'Quantum-Resistant Cryptography', size: '32 MB', category: 'security', installed: true, dependencies: ['z-kernel'], repository: 'z-os-security' },
-  { name: 'nginx', version: '1.27.0', description: 'High-performance Web Server', size: '8 MB', category: 'network', installed: true, dependencies: [], repository: 'z-os-net' },
-  { name: 'z-openssh', version: '9.8p1', description: 'Secure Shell with Z-OS enhancements', size: '4 MB', category: 'network', installed: true, dependencies: ['z-quantum-crypto'], repository: 'z-os-net' },
-  { name: 'docker', version: '26.1.0', description: 'Container Runtime', size: '128 MB', category: 'dev', installed: false, dependencies: ['z-kernel'], repository: 'z-os-dev' },
-  { name: 'python3', version: '3.13.0', description: 'Python Programming Language', size: '64 MB', category: 'dev', installed: true, dependencies: [], repository: 'z-os-dev' },
-  { name: 'nodejs', version: '22.0.0', description: 'Node.js JavaScript Runtime', size: '48 MB', category: 'dev', installed: true, dependencies: [], repository: 'z-os-dev' },
-  { name: 'gcc', version: '14.1.0', description: 'GNU Compiler Collection', size: '96 MB', category: 'dev', installed: true, dependencies: [], repository: 'z-os-dev' },
-  { name: 'git', version: '2.45.0', description: 'Distributed Version Control', size: '16 MB', category: 'dev', installed: true, dependencies: [], repository: 'z-os-dev' },
-  { name: 'z-vpn', version: '1.2.0', description: 'WireGuard VPN Client/Server', size: '6 MB', category: 'network', installed: false, dependencies: ['z-kernel'], repository: 'z-os-net' },
-  { name: 'z-tor', version: '0.4.8', description: 'Tor Anonymity Network', size: '12 MB', category: 'network', installed: false, dependencies: [], repository: 'z-os-net' },
-  { name: 'postgresql', version: '17.0', description: 'Advanced Database Server', size: '64 MB', category: 'database', installed: false, dependencies: [], repository: 'z-os-data' },
-  { name: 'redis', version: '8.0', description: 'In-Memory Data Store', size: '8 MB', category: 'database', installed: false, dependencies: [], repository: 'z-os-data' },
-  { name: 'z-monitor', version: '2.5.0', description: 'System Monitoring Dashboard', size: '32 MB', category: 'system', installed: true, dependencies: ['z-kernel'], repository: 'z-os-core' },
-  { name: 'z-audit', version: '4.0.0', description: 'Security Audit Framework', size: '16 MB', category: 'security', installed: true, dependencies: ['z-kernel', 'z-firewall'], repository: 'z-os-security' },
-  { name: 'rust', version: '1.78.0', description: 'Rust Programming Language', size: '256 MB', category: 'dev', installed: false, dependencies: [], repository: 'z-os-dev' },
-  { name: 'go', version: '1.22.0', description: 'Go Programming Language', size: '128 MB', category: 'dev', installed: false, dependencies: [], repository: 'z-os-dev' },
-  { name: 'z-desktop', version: '3.0.0', description: 'Z-OS Quantum Desktop Environment', size: '128 MB', category: 'desktop', installed: true, dependencies: ['z-kernel'], repository: 'z-os-desktop' },
+  { name: 'linux-image-generic', version: '6.8.0-45.45', description: 'Linux kernel image', size: '14 MB', category: 'kernel', installed: true, dependencies: [], repository: 'main' },
+  { name: 'bash', version: '5.2.21-2ubuntu4', description: 'GNU Bourne Again SHell', size: '1.8 MB', category: 'shells', installed: true, dependencies: [], repository: 'main' },
+  { name: 'coreutils', version: '9.4-3ubuntu6', description: 'GNU core utilities', size: '6.2 MB', category: 'utils', installed: true, dependencies: [], repository: 'main' },
+  { name: 'sudo', version: '1.9.15p5-3ubuntu5', description: 'Execute commands as another user', size: '1.4 MB', category: 'admin', installed: true, dependencies: [], repository: 'main' },
+  { name: 'apt', version: '2.7.14build2', description: 'Advanced Package Tool', size: '3.8 MB', category: 'admin', installed: true, dependencies: [], repository: 'main' },
+  { name: 'nginx', version: '1.24.0-2ubuntu7', description: 'High-performance web server', size: '196 kB', category: 'web', installed: true, dependencies: [], repository: 'universe' },
+  { name: 'openssh-server', version: '1:9.6p1-3ubuntu13', description: 'Secure shell server', size: '450 kB', category: 'net', installed: true, dependencies: [], repository: 'main' },
+  { name: 'ufw', version: '0.36.2-6', description: 'Uncomplicated Firewall', size: '180 kB', category: 'admin', installed: true, dependencies: [], repository: 'main' },
+  { name: 'python3', version: '3.12.3-0ubuntu2', description: 'Python 3 interpreter', size: '60 kB', category: 'python', installed: true, dependencies: [], repository: 'main' },
+  { name: 'nodejs', version: '18.19.1-1ubuntu3', description: 'Node.js JavaScript runtime', size: '24 MB', category: 'web', installed: true, dependencies: [], repository: 'universe' },
+  { name: 'gcc', version: '4:13.2.0-7ubuntu1', description: 'GNU C compiler', size: '56 kB', category: 'devel', installed: true, dependencies: [], repository: 'main' },
+  { name: 'git', version: '1:2.43.0-1ubuntu7', description: 'Distributed version control system', size: '3.5 MB', category: 'vcs', installed: true, dependencies: [], repository: 'main' },
+  { name: 'curl', version: '8.5.0-2ubuntu10', description: 'Command line tool for transferring data', size: '260 kB', category: 'web', installed: true, dependencies: [], repository: 'main' },
+  { name: 'wget', version: '1.21.4-1ubuntu4', description: 'Retrieves files from the web', size: '370 kB', category: 'web', installed: true, dependencies: [], repository: 'main' },
+  { name: 'docker.io', version: '24.0.7-0ubuntu4', description: 'Linux container runtime', size: '48 MB', category: 'admin', installed: false, dependencies: [], repository: 'universe' },
+  { name: 'postgresql', version: '16+246build1', description: 'Object-relational SQL database', size: '120 kB', category: 'database', installed: false, dependencies: [], repository: 'main' },
+  { name: 'redis-server', version: '5:7.0.15-1build1', description: 'Persistent key-value database', size: '260 kB', category: 'database', installed: false, dependencies: [], repository: 'universe' },
+  { name: 'vim', version: '2:9.1.0016-1ubuntu7', description: 'Vi IMproved - enhanced vi editor', size: '1.5 MB', category: 'editors', installed: true, dependencies: [], repository: 'main' },
+  { name: 'nano', version: '7.2-2build1', description: 'Small, friendly text editor', size: '330 kB', category: 'editors', installed: true, dependencies: [], repository: 'main' },
+  { name: 'htop', version: '3.3.0-4build1', description: 'Interactive processes viewer', size: '120 kB', category: 'utils', installed: true, dependencies: [], repository: 'universe' },
+  { name: 'tmux', version: '3.4-2build1', description: 'Terminal multiplexer', size: '340 kB', category: 'shells', installed: true, dependencies: [], repository: 'main' },
+  { name: 'net-tools', version: '2.10-0.1ubuntu1', description: 'NET-3 networking toolkit', size: '180 kB', category: 'net', installed: true, dependencies: [], repository: 'main' },
+  { name: 'lynx', version: '2.9.0rel.0-3ubuntu1', description: 'Text-mode WWW browser', size: '1.2 MB', category: 'web', installed: true, dependencies: [], repository: 'universe' },
+  { name: 'w3m', version: '0.5.3+git20230121-2build1', description: 'WWW browsable pager', size: '840 kB', category: 'web', installed: true, dependencies: [], repository: 'universe' },
+  { name: 'xfce4', version: '4.18', description: 'XFCE desktop environment', size: '64 MB', category: 'x11', installed: true, dependencies: [], repository: 'universe' },
+  { name: 'xorg', version: '1:7.7+23ubuntu3', description: 'X.Org X Window System', size: '32 MB', category: 'x11', installed: true, dependencies: [], repository: 'main' },
+  { name: 'firefox', version: '126.0+build1-0ubuntu1', description: 'Mozilla Firefox web browser', size: '85 MB', category: 'web', installed: true, dependencies: [], repository: 'main' },
+  { name: 'build-essential', version: '12.10ubuntu1', description: 'Informational list of build-essential packages', size: '4 kB', category: 'devel', installed: true, dependencies: [], repository: 'main' },
+  { name: 'cmake', version: '3.28.3-1build1', description: 'Cross-platform make system', size: '6.5 MB', category: 'devel', installed: true, dependencies: [], repository: 'main' },
+  { name: 'golang-go', version: '1.22.2-1ubuntu1', description: 'Go programming language compiler', size: '64 MB', category: 'devel', installed: false, dependencies: [], repository: 'universe' },
+  { name: 'rustc', version: '1.75.0+dfsg0ubuntu1', description: 'Rust systems programming language', size: '35 MB', category: 'devel', installed: false, dependencies: [], repository: 'universe' },
+  { name: 'mysql-server', version: '8.0.37-0ubuntu0.24.04', description: 'MySQL database server', size: '12 MB', category: 'database', installed: false, dependencies: [], repository: 'main' },
 ]
+
+// ═══════════════════════════════════════════
+// SIMULATED WEBSITES FOR curl/wget
+// ═══════════════════════════════════════════
+
+const simulatedWebsites: Record<string, { content: string; headers: Record<string, string> }> = {
+  'example.com': {
+    content: `<!doctype html>
+<html>
+<head>
+    <title>Example Domain</title>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+<div>
+    <h1>Example Domain</h1>
+    <p>This domain is for use in illustrative examples in documents. You may use this domain in literature without prior coordination or asking for permission.</p>
+    <p><a href="https://www.iana.org/domains/example">More information...</a></p>
+</div>
+</body>
+</html>`,
+    headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Server': 'ECS (dcb/7F84)', 'Content-Length': '1256', 'Date': new Date().toUTCString() },
+  },
+  'google.com': {
+    content: `<!doctype html>
+<html itemscope="" itemtype="http://schema.org/WebPage" lang="en">
+<head><meta content="Search the world's information" name="description"/><title>Google</title></head>
+<body><div><form action="/search"><input name="q" type="text"/></form></div></body>
+</html>`,
+    headers: { 'Content-Type': 'text/html; charset=ISO-8859-1', 'Server': 'gws', 'Content-Length': '15648', 'Date': new Date().toUTCString() },
+  },
+  'github.com': {
+    content: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>GitHub: Let's build from here</title></head>
+<body>
+<div><h1>Let's build from here</h1><p>The world's leading AI-powered developer platform.</p></div>
+</body>
+</html>`,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Server': 'GitHub.com', 'Content-Length': '84520', 'Date': new Date().toUTCString() },
+  },
+  'ubuntu.com': {
+    content: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Ubuntu - The leading platform for AI, IoT and cloud</title></head>
+<body>
+<div><h1>Ubuntu</h1><p>The leading platform for AI, IoT and cloud</p><p>Enterprise open source, supported and secured.</p></div>
+</body>
+</html>`,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Server': 'nginx', 'Content-Length': '52340', 'Date': new Date().toUTCString() },
+  },
+  'stackoverflow.com': {
+    content: `<!DOCTYPE html>
+<html>
+<head><title>Stack Overflow - Where Developers Learn, Share, & Build Careers</title></head>
+<body>
+<div><h1>Stack Overflow</h1><p>Where developers learn, share, & build careers.</p></div>
+</body>
+</html>`,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Server': 'cloudflare', 'Content-Length': '112340', 'Date': new Date().toUTCString() },
+  },
+  'wikipedia.org': {
+    content: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Wikipedia, the free encyclopedia</title></head>
+<body>
+<div><h1>Wikipedia</h1><p>The Free Encyclopedia</p></div>
+</body>
+</html>`,
+    headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Server': 'mw-api-ext', 'Content-Length': '78900', 'Date': new Date().toUTCString() },
+  },
+}
 
 // ═══════════════════════════════════════════
 // SESSIONS & SYSTEM STATE
@@ -455,6 +482,7 @@ const sessions = new Map<string, Session>()
 const startTime = Date.now()
 let totalConnections = 0
 let totalCommands = 0
+let ufwEnabled = true
 
 // ═══════════════════════════════════════════
 // FILESYSTEM NAVIGATION HELPERS
@@ -462,8 +490,8 @@ let totalCommands = 0
 
 function resolvePath(inputPath: string, cwd: string): string {
   if (!inputPath || inputPath === '') return cwd
-  if (inputPath === '~') return '/home/z-user'
-  if (inputPath.startsWith('~/')) return '/home/z-user/' + inputPath.slice(2)
+  if (inputPath === '~') return '/home/ubuntu'
+  if (inputPath.startsWith('~/')) return '/home/ubuntu/' + inputPath.slice(2)
   if (inputPath.startsWith('/')) {
     return normalizePath(inputPath)
   }
@@ -526,21 +554,18 @@ function getSystemMetrics() {
   const loadAvg = [(Math.random() * 2).toFixed(2), (Math.random() * 1.5).toFixed(2), (Math.random() * 1).toFixed(2)]
   const processes = 142 + Math.floor(Math.random() * 20)
   const threads = 547 + Math.floor(Math.random() * 50)
-  const threats = Math.floor(Math.random() * 3)
-  const blockedIPs = 12 + Math.floor(Math.random() * 5)
 
-  return { uptime, cpuUsage, memUsed, memTotal, diskUsed, diskTotal, netRx, netTx, loadAvg, processes, threads, threats, blockedIPs }
+  return { uptime, cpuUsage, memUsed, memTotal, diskUsed, diskTotal, netRx, netTx, loadAvg, processes, threads }
 }
 
 // ═══════════════════════════════════════════
-// COMMAND PROCESSOR - The Heart of Z-OS
+// COMMAND PROCESSOR - The Heart of Ubuntu
 // ═══════════════════════════════════════════
 
 function processCommand(rawInput: string, session: Session): { output: string; cwd?: string; action?: string } {
   totalCommands++
   session.lastActivity = new Date()
 
-  // Handle aliases
   let input = rawInput.trim()
   if (!input) return { output: '' }
 
@@ -561,7 +586,6 @@ function processCommand(rawInput: string, session: Session): { output: string; c
     const cmd = parts[0].toLowerCase()
     const args = parts.slice(1)
 
-    // If piped, prepend last output as virtual file
     const effectiveArgs = lastOutput ? [...args] : args
 
     const result = executeSingleCommand(cmd, effectiveArgs, session, lastOutput)
@@ -583,97 +607,83 @@ function executeSingleCommand(cmd: string, args: string[], session: Session, pip
     case 'help': {
       if (args[0] === 'advanced' || args[0] === '-a') {
         return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║          \x1b[1;33mZ-OS Advanced Commands Reference\x1b[1;36m                        ║\x1b[0m
+\x1b[1;36m║          \x1b[1;33mUbuntu Advanced Commands Reference\x1b[0m                        \x1b[1;36m║\x1b[0m
 \x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;32mSYSTEM\x1b[0m                                                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zsysinfo       Full system information                    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zbenchmark     Run system benchmarks                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   ztopology      Show system topology                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   ztrace         System call tracer                        \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m \x1b[1;33mSYSTEM\x1b[0m                                                        \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   systemctl      Manage system services                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   ufw            Manage firewall rules                        \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   apt            Package management                           \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   dpkg           Debian package manager                       \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   ip             Network configuration                        \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   ss             Socket statistics                            \x1b[1;36m║\x1b[0m
 \x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;32mSECURITY\x1b[0m                                                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zsec scan       Full security vulnerability scan          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zsec harden     Apply security hardening                 \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zsec audit      View security audit log                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zsec encrypt    Encrypt files/directories                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zsec decrypt    Decrypt files/directories                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zfirewall       Manage AI firewall                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m \x1b[1;33mNETWORK\x1b[0m                                                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   curl           Transfer data from URLs                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   wget           Download files from the web                  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   ssh            Secure shell client                          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   scp            Secure copy                                  \x1b[1;36m║\x1b[0m
 \x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;32mNETWORK\x1b[0m                                                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   znet status     Network interface status                 \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   znet scan       Network port scanner                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   znet trace      Traceroute to host                       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   znet dns        DNS lookup tool                          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   znet monitor    Real-time network monitor                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[1;33mPACKAGES\x1b[0m                                                     \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   apt update     Update package lists                         \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   apt upgrade    Upgrade installed packages                   \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   apt install    Install packages                             \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   apt remove     Remove packages                              \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   apt search     Search packages                              \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   apt list       List packages                                \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   apt show       Show package details                         \x1b[1;36m║\x1b[0m
 \x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;32mPACKAGES\x1b[0m                                                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zpkg list       List available packages                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zpkg install    Install packages                         \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zpkg remove     Remove packages                          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zpkg update     Update all packages                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zpkg search     Search packages                          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[1;33mDESKTOP\x1b[0m                                                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   startx         Start X Window System                        \x1b[1;36m║\x1b[0m
 \x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;32mPROCESSES & SERVICES\x1b[0m                                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zps             Advanced process viewer                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zservice        Manage system services                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zkill           Kill processes with AI prioritization    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;32mZ-SCRIPT\x1b[0m                                                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zrun            Execute Z-Script programs                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zcompile        Compile Z-Script to bytecode             \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zdebug          Debug Z-Script programs                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;32mPOWER USER\x1b[0m                                                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   alias           Create command aliases                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   export          Set environment variables                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   zhistory        Enhanced command history                 \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   ztour           Interactive Z-OS tour                    \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[1;33mPOWER USER\x1b[0m                                                   \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   alias          Create command aliases                       \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   export         Set environment variables                    \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   history        Command history                              \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   sudo           Execute as superuser                         \x1b[1;36m║\x1b[0m
 \x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
       }
       return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║          \x1b[1;33mZ-OS 3.0 Quantum - Command Reference\x1b[1;36m                      ║\x1b[0m
+\x1b[1;36m║          \x1b[1;33mUbuntu 24.04 LTS - Command Reference\x1b[0m                       \x1b[1;36m║\x1b[0m
 \x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
 \x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;32mNavigation & Files\x1b[0m                                            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mls\x1b[0m [\x1b[36m-la\x1b[0m] [\x1b[36mpath\x1b[0m]    List directory contents              \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mcd\x1b[0m [\x1b[36mpath\x1b[0m]           Change directory                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mpwd\x1b[0m                  Print working directory              \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mcat\x1b[0m [\x1b[36mfile\x1b[0m]          Display file contents                 \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mmkdir\x1b[0m [\x1b[36mdir\x1b[0m]         Create directory                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mtouch\x1b[0m [\x1b[36mfile\x1b[0m]        Create empty file                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mrm\x1b[0m [\x1b[36m-rf\x1b[0m] [\x1b[36mtarget\x1b[0m]   Remove file/directory                 \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mcp\x1b[0m [\x1b[36msrc\x1b[0m] [\x1b[36mdst\x1b[0m]     Copy files                            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mmv\x1b[0m [\x1b[36msrc\x1b[0m] [\x1b[36mdst\x1b[0m]     Move/rename files                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mfind\x1b[0m [\x1b[36mpath\x1b[0m] [\x1b[36mname\x1b[0m]   Search for files                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mgrep\x1b[0m [\x1b[36mpattern\x1b[0m] [\x1b[36mfile\x1b[0m] Search text in files                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mchmod\x1b[0m [\x1b[36mperms\x1b[0m] [\x1b[36mfile\x1b[0m] Change file permissions               \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m \x1b[1;33mNavigation & Files\x1b[0m                                            \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mls\x1b[0m [\x1b-la\x1b] [\x1bpath\x1b]    List directory contents              \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mcd\x1b[0m [\x1bpath\x1b]           Change directory                     \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mpwd\x1b[0m                  Print working directory              \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mcat\x1b[0m [\x1bfile\x1b]          Display file contents                 \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mmkdir\x1b[0m [\x1bdir\x1b]         Create directory                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mtouch\x1b[0m [\x1bfile\x1b]        Create empty file                     \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mrm\x1b[0m [\x1b-rf\x1b] [\x1btarget\x1b]   Remove file/directory                 \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mcp\x1b[0m [\x1bsrc\x1b] [\x1bdst\x1b]     Copy files                            \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mmv\x1b[0m [\x1bsrc\x1b] [\x1bdst\x1b]     Move/rename files                     \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mfind\x1b[0m [\x1bpath\x1b] [\x1bname\x1b]   Search for files                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mgrep\x1b[0m [\x1bpattern\x1b] [\x1bfile\x1b] Search text in files                  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mchmod\x1b[0m [\x1bperms\x1b] [\x1bfile\x1b] Change file permissions               \x1b[1;36m║\x1b[0m
 \x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;32mSystem Information\x1b[0m                                             \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33muname\x1b[0m [\x1b[36m-a\x1b[0m]           System information                    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mwhoami\x1b[0m               Current user                          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mhostname\x1b[0m             System hostname                       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mdate\x1b[0m                  Current date/time                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33muptime\x1b[0m               System uptime                         \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mneofetch\x1b[0m             System info with ASCII art            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mfree\x1b[0m [\x1b[36m-h\x1b[0m]           Memory usage                          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mdf\x1b[0m [\x1b[36m-h\x1b[0m]            Disk space usage                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mps\x1b[0m [\x1b[36maux\x1b[0m]            Process list                          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mtop\x1b[0m                  System resources                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m \x1b[1;33mSystem Information\x1b[0m                                             \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36muname\x1b[0m [\x1b-a\x1b]           System information                    \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mwhoami\x1b[0m               Current user                          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mhostname\x1b[0m             System hostname                       \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mdate\x1b[0m                  Current date/time                     \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36muptime\x1b[0m               System uptime                         \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mneofetch\x1b[0m             System info with ASCII art            \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mfree\x1b[0m [\x1b-h\x1b]           Memory usage                          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mdf\x1b[0m [\x1b-h\x1b]            Disk space usage                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mps\x1b[0m [\x1baux\x1b]            Process list                          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mtop\x1b[0m                  System resources                      \x1b[1;36m║\x1b[0m
 \x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;32mZ-OS Exclusive Commands\x1b[0m                                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mzsysinfo\x1b[0m             Full Z-OS system report               \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mzsec scan\x1b[0m            Security vulnerability scan            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mzfirewall\x1b[0m            AI firewall management                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mznet status\x1b[0m          Network status                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mzpkg list\x1b[0m            Package manager                       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mzservice\x1b[0m             Service management                    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mztour\x1b[0m               Interactive Z-OS tour                  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m \x1b[1;33mPackage Management\x1b[0m                                           \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mapt update\x1b[0m          Update package lists                   \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mapt upgrade\x1b[0m         Upgrade packages                       \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mapt install\x1b[0m <pkg>  Install a package                      \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mapt remove\x1b[0m <pkg>   Remove a package                       \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mapt search\x1b[0m <term>  Search for packages                    \x1b[1;36m║\x1b[0m
 \x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;32mOther\x1b[0m                                                          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mecho\x1b[0m [\x1b[36mtext\x1b[0m]          Print text                            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mclear\x1b[0m                Clear terminal                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mexit\x1b[0m                Disconnect                            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   \x1b[33mhelp -a\x1b[0m              Advanced commands                     \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m \x1b[1;33mOther\x1b[0m                                                          \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mecho\x1b[0m [\x1btext\x1b]          Print text                            \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mclear\x1b[0m                Clear terminal                        \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mexit\x1b[0m                Disconnect                            \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m   \x1b[36mhelp -a\x1b[0m              Advanced commands                     \x1b[1;36m║\x1b[0m
 \x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
     }
 
@@ -697,7 +707,7 @@ function executeSingleCommand(cmd: string, args: string[], session: Session, pip
           const color = e.type === 'directory' ? '\x1b[1;34m' : e.type === 'symlink' ? '\x1b[1;36m' : e.permissions.includes('x') ? '\x1b[1;32m' : '\x1b[0m'
           const suffix = e.type === 'directory' ? '/' : e.type === 'symlink' ? ` -> ${e.target}` : ''
           const date = e.modified.toISOString().split('T')[0]
-          return `${e.permissions} 1 ${e.owner.padEnd(6)} ${e.group.padEnd(6)} ${String(e.size).padStart(8)} ${date} ${color}${e.name}${suffix}\x1b[0m`
+          return `${e.permissions} 1 ${e.owner.padEnd(8)} ${e.group.padEnd(8)} ${String(e.size).padStart(8)} ${date} ${color}${e.name}${suffix}\x1b[0m`
         })
         lines.unshift(`total ${entries.length}`)
         return { output: lines.join('\n') }
@@ -711,11 +721,11 @@ function executeSingleCommand(cmd: string, args: string[], session: Session, pip
     }
 
     case 'cd': {
-      const target = args[0] || '/home/z-user'
+      const target = args[0] || '/home/ubuntu'
       const newPath = resolvePath(target, session.cwd)
       const node = getNodeAtPath(newPath)
       if (!node || node.type !== 'directory') {
-        return { output: `\x1b[31mcd: no such file or directory: ${target}\x1b[0m` }
+        return { output: `\x1b[31mbash: cd: ${target}: No such file or directory\x1b[0m` }
       }
       return { output: '', cwd: newPath }
     }
@@ -729,7 +739,6 @@ function executeSingleCommand(cmd: string, args: string[], session: Session, pip
       const node = getNodeAtPath(filePath)
       if (!node) return { output: `\x1b[31mcat: ${args[0]}: No such file or directory\x1b[0m` }
       if (node.type === 'directory') return { output: `\x1b[31mcat: ${args[0]}: Is a directory\x1b[0m` }
-      if (node.encrypted) return { output: `\x1b[33mcat: ${args[0]}: File is encrypted. Use 'zsec decrypt' first.\x1b[0m` }
       return { output: node.content || '' }
     }
 
@@ -855,17 +864,17 @@ function executeSingleCommand(cmd: string, args: string[], session: Session, pip
     }
 
     case 'whoami':
-      return { output: session.username }
+      return { output: session.isRoot ? 'root' : session.username }
 
     case 'hostname':
       return { output: session.hostname }
 
     case 'uname': {
       if (args.includes('-a')) {
-        return { output: `Z-OS z-mainframe 6.2.0-z-quantum #1 SMP PREEMPT_DYNAMIC x86_64 Quantum/Z GNU/Z-OS` }
+        return { output: `Linux ubuntu-server 6.8.0-45-generic #45-Ubuntu SMP x86_64 GNU/Linux` }
       }
-      if (args.includes('-r')) return { output: '6.2.0-z-quantum' }
-      return { output: 'Z-OS' }
+      if (args.includes('-r')) return { output: '6.8.0-45-generic' }
+      return { output: 'Linux' }
     }
 
     case 'date':
@@ -880,7 +889,7 @@ function executeSingleCommand(cmd: string, args: string[], session: Session, pip
       const m = getSystemMetrics()
       if (args.includes('-h')) {
         return { output: `              total        used        free      shared  buff/cache   available
-Mem:          16Gi       ${Math.floor(m.memUsed/1024)}Gi       ${Math.floor((m.memTotal-m.memUsed)/1024)}Gi       128Mi       2.0Gi        ${Math.floor((m.memTotal-m.memUsed+2048)/1024)}Gi
+Mem:           16Gi       ${Math.floor(m.memUsed/1024)}Gi       ${Math.floor((m.memTotal-m.memUsed)/1024)}Gi       128Mi       2.0Gi        ${Math.floor((m.memTotal-m.memUsed+2048)/1024)}Gi
 Swap:         8.0Gi         0Bi       8.0Gi` }
       }
       return { output: `              total        used        free      shared  buff/cache   available
@@ -891,16 +900,12 @@ Swap:        8388608           0     8388608` }
     case 'df': {
       if (args.includes('-h')) {
         return { output: `Filesystem      Size  Used Avail Use% Mounted on
-/dev/zroot       64G  8.2G   52G  14% /
-/dev/zroot/home  32G  2.1G   29G   7% /home
-tmpfs           2.0G     0  2.0G   0% /tmp
-/dev/zroot/var  16G  980M   14G   7% /var` }
+/dev/sda1        64G  8.2G   52G  14% /
+tmpfs           2.0G     0  2.0G   0% /tmp` }
       }
       return { output: `Filesystem     1K-blocks    Used Available Use% Mounted on
-/dev/zroot      67108864 8598324 55243540  14% /
-/dev/zroot/home 33554432 2202008 29724424   7% /home
-tmpfs            2097152       0   2097152   0% /tmp
-/dev/zroot/var  16777216  998400  14788816   7% /var` }
+/dev/sda1      67108864 8598324 55243540  14% /
+tmpfs            2097152       0   2097152   0% /tmp` }
     }
 
     case 'ps': {
@@ -910,8 +915,8 @@ tmpfs            2097152       0   2097152   0% /tmp
 ${procs.map(p => `${p.user.padEnd(8)} ${String(p.pid).padStart(5)} ${p.cpu.toFixed(1).padStart(4)} ${p.memory.toFixed(1).padStart(4)} ${String(Math.floor(Math.random()*500000)).padStart(7)} ${String(Math.floor(Math.random()*50000)).padStart(6)} pts/0    ${p.status === 'running' ? 'Ssl' : 'S'}   ${new Date(p.startTime*1000).toLocaleTimeString().slice(0,5)}   0:${String(Math.floor(Math.random()*59)).padStart(2)}.${String(Math.floor(Math.random()*99)).padStart(2)} ${p.cmd}`).join('\n')}` }
       }
       return { output: `  PID TTY          TIME CMD
-    1 pts/0    00:00:02 z-init
-  142 pts/0    00:00:00 zsh
+    1 pts/0    00:00:02 systemd
+  142 pts/0    00:00:00 bash
   389 pts/0    00:00:01 ps` }
     }
 
@@ -921,576 +926,540 @@ ${procs.map(p => `${p.user.padEnd(8)} ${String(p.pid).padStart(5)} ${p.cpu.toFix
 Tasks: \x1b[32m${m.processes} total\x1b[0m, ${Math.floor(Math.random()*3)+1} running, ${m.processes-2} sleeping, 0 stopped, 0 zombie
 %Cpu(s): \x1b[32m${m.cpuUsage.toFixed(1)}% us\x1b[0m, ${(Math.random()*3).toFixed(1)}% sy, 0.0% ni, ${(100-m.cpuUsage-3).toFixed(1)}% id
 MiB Mem:  16384.0 total,  ${(m.memTotal-m.memUsed)/1024*4|0}.0 free,  ${m.memUsed/1024*4|0}.0 used,   2048.0 buff/cache
-MiB Swap:  8192.0 total,   8192.0 free,      0.0 used.  ${(m.memTotal-m.memUsed+2048)/1024*4|0}.0 avail Mem
+MiB Swap:  8192.0 total,   8192.0 free,      0.0 used.  ${((m.memTotal-m.memUsed+2048)/m.memTotal*100).toFixed(1)} avail Mem
 
   PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
-    1 root      20   0  102340  12480   8960 S   0.0   0.1   0:02.45 z-init
-    2 root      20   0   24560   8420   6240 S   0.3   0.0   0:01.23 z-kernel-guard
-    3 root      20   0   18240   5120   4096 S   0.0   0.0   0:00.34 z-firewall
-    4 root      20   0   30720   6144   5120 S   0.1   0.0   0:00.56 z-netmanager
-    5 root      -2   0   40960  10240   8192 S   0.0   0.1   0:00.12 z-quantum-crypto
-    6 root      20   0   65536  25600  20480 S   0.2   0.2   0:01.89 z-ai-detect
-    7 root      20   0   12800   3072   2560 S   0.0   0.0   0:00.08 z-auditd
-   10 www-data  20   0   24560   8420   6240 S   0.0   0.0   0:00.23 nginx
-  142 z-user    20   0   10240   4120   3200 S   0.0   0.0   0:00.12 zsh` }
+    1 root      20   0  168932  12644   8412 S   0.0   0.1   0:02.34 systemd
+  234 root      20   0   48356   5234   3421 S   0.0   0.0   0:00.12 ufw
+  456 root      20   0  285672  23456  12345 S   0.1   0.1   0:01.23 NetworkManager
+  567 root      20   0  154234  10234   6789 S   0.0   0.1   0:00.56 sshd
+  890 www-data  20   0   45678   5678   3456 S   0.1   0.0   0:00.89 nginx
+  142 ubuntu    20   0   23456   4567   2345 S   0.0   0.0   0:00.12 bash` }
     }
 
     case 'neofetch': {
       const m = getSystemMetrics()
-      return { output: `\x1b[1;32m        ╔══════════════╗\x1b[0m       \x1b[1;33m${session.username}@${session.hostname}\x1b[0m
-\x1b[1;32m        ║  ╔══╗  ╔══╗  ║\x1b[0m       \x1b[1;33m──────────────────────────\x1b[0m
-\x1b[1;32m        ║  ║ Z║  ║OS║  ║\x1b[0m       \x1b[1;33mOS:\x1b[0m Z-OS 3.0 Quantum x86_64
-\x1b[1;32m        ║  ╚══╝  ╚══╝  ║\x1b[0m       \x1b[1;33mHost:\x1b[0m Z-Cloud Quantum Instance
-\x1b[1;32m        ║  ╔════════╗  ║\x1b[0m       \x1b[1;33mKernel:\x1b[0m 6.2.0-z-quantum
-\x1b[1;32m        ║  ║QUANTUM║  ║\x1b[0m       \x1b[1;33mUptime:\x1b[0m ${Math.floor(m.uptime/3600)} hours, ${Math.floor((m.uptime%3600)/60)} mins
-\x1b[1;32m        ║  ╚════════╝  ║\x1b[0m       \x1b[1;33mCPU:\x1b[0m Z-Quantum vCPU (4) @ 4.2GHz
-\x1b[1;32m        ║  ╔══╗╔══╗╔══╗║\x1b[0m       \x1b[1;33mMemory:\x1b[0m ${Math.floor(m.memUsed/1024*4)}MiB / 16384MiB
-\x1b[1;32m        ║  ║01║║10║║11║║\x1b[0m       \x1b[1;33mDisk:\x1b[0m ${m.diskUsed}G / ${m.diskTotal}G (${Math.floor(m.diskUsed/m.diskTotal*100)}%)
-\x1b[1;32m        ║  ╚══╝╚══╝╚══╝║\x1b[0m       \x1b[1;33mNetwork:\x1b[0m z0 (10 Gbps)
-\x1b[1;32m        ╚══════════════╝\x1b[0m       \x1b[1;33mSecurity:\x1b[0m \x1b[32mPARANOID (max hardening)\x1b[0m
-                                  \x1b[1;33mFirewall:\x1b[0m \x1b[32mAI-Powered (247 rules active)\x1b[0m
-                                  \x1b[1;33mThreats blocked:\x1b[0m \x1b[31m${m.blockedIPs} IPs\x1b[0m
-                                  \x1b[1;33mEncryption:\x1b[0m AES-256-GCM + Quantum-safe
-                                  \x1b[1;33mShell:\x1b[0m zsh 5.9
-                                  \x1b[1;33mResolution:\x1b[0m ${args.includes('-r') ? '3840x2160' : 'terminal'}
-                                  \x1b[1;33mPackages:\x1b[0m 42000 (zpkg)
-                                  \x1b[1;33mSession:\x1b[0m ${session.id.slice(0,8)}` }
-    }
-
-    // ═══════════════════════════════
-    // Z-OS EXCLUSIVE COMMANDS
-    // ═══════════════════════════════
-
-    case 'zsysinfo': {
-      const m = getSystemMetrics()
-      return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║               \x1b[1;33mZ-OS 3.0 Quantum - System Report\x1b[1;36m                          ║\x1b[0m
-\x1b[1;36m╠════════════════════════════════════════════════════════════════════╣\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;34mSYSTEM\x1b[0m                                                            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Kernel:     6.2.0-z-quantum (PREEMPT_DYNAMIC)                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Arch:       x86_64 (Quantum/Z)                                 \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Uptime:     ${Math.floor(m.uptime/3600)}h ${Math.floor((m.uptime%3600)/60)}m                                         \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Load:       ${m.loadAvg.join(', ')}                                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Processes:  ${m.processes} (${m.threads} threads)                               \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;34mRESOURCES\x1b[0m                                                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   CPU:        Z-Quantum vCPU (4 cores) @ 4.2GHz                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   CPU Usage:  ${m.cpuUsage.toFixed(1)}%                                          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Memory:     ${Math.floor(m.memUsed/1024*4)}MiB / 16384MiB (${(m.memUsed/m.memTotal*100).toFixed(1)}%)                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Disk:       ${m.diskUsed}G / ${m.diskTotal}G (${Math.floor(m.diskUsed/m.diskTotal*100)}%)                             \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Network:    RX: ${(m.netRx/1024/1024).toFixed(1)}MB / TX: ${(m.netTx/1024/1024).toFixed(1)}MB                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;34mSECURITY\x1b[0m                                                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Level:      \x1b[32mPARANOID\x1b[0m (Maximum Hardening)                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Firewall:   \x1b[32mActive\x1b[0m (247 rules, AI-powered)                    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Blocked:    \x1b[31m${m.blockedIPs} IPs\x1b[0m                                          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Encryption: \x1b[32mAES-256-GCM + Kyber-1024\x1b[0m (Quantum-safe)              \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   ASLR:       Full + Randomized Stack                            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   Threats:    ${m.threats === 0 ? '\x1b[32m0 active threats\x1b[0m' : `\x1b[31m${m.threats} active threats\x1b[0m`}                              \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m \x1b[1;34mZ-OS ADVANTAGES OVER LINUX\x1b[0m                                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   + AI-powered process scheduling (40% faster context switches)    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   + Quantum-resistant encryption by default                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   + Self-healing ZFS filesystem with auto-repair                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   + Zero-trust architecture at kernel level                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   + Real-time kernel patching (no reboot needed)                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   + AI threat detection with 99.97% accuracy                       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   + Memory deduplication (saves up to 30% RAM)                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m   + nanosecond-resolution process scheduling                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m╚════════════════════════════════════════════════════════════════════╝\x1b[0m` }
-    }
-
-    case 'zsec': {
-      if (args[0] === 'scan') {
-        const vulns = vulnerabilityDB
-        const critical = vulns.filter(v => v.severity === 'critical').length
-        const high = vulns.filter(v => v.severity === 'high').length
-        const medium = vulns.filter(v => v.severity === 'medium').length
-        const low = vulns.filter(v => v.severity === 'low').length
-        const patched = vulns.filter(v => v.status === 'patched').length
-        const open = vulns.filter(v => v.status === 'open').length
-
-        return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║           \x1b[1;31mZ-OS Security Vulnerability Scan Report\x1b[1;36m                    ║\x1b[0m
-\x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;33mScan Summary:\x1b[0m                                                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m    Total vulnerabilities found: ${vulns.length}                              \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m    \x1b[31mCritical: ${critical}\x1b[0m  \x1b[33mHigh: ${high}\x1b[0m  \x1b[36mMedium: ${medium}\x1b[0m  \x1b[32mLow: ${low}\x1b[0m                    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m    \x1b[32mPatched: ${patched}\x1b[0m  \x1b[31mOpen: ${open}\x1b[0m                                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;33mVulnerability Details:\x1b[0m                                         \x1b[1;36m║\x1b[0m
-${vulns.map(v => {
-  const sevColor = v.severity === 'critical' ? '\x1b[1;31m' : v.severity === 'high' ? '\x1b[33m' : v.severity === 'medium' ? '\x1b[36m' : v.severity === 'low' ? '\x1b[32m' : '\x1b[0m'
-  const statusIcon = v.status === 'patched' ? '\x1b[32m[PATCHED]\x1b[0m' : v.status === 'open' ? '\x1b[31m[OPEN]\x1b[0m' : '\x1b[33m[IGNORED]\x1b[0m'
-  return `\x1b[1;36m║\x1b[0m  ${sevColor}[${v.severity.toUpperCase().padEnd(8)}]\x1b[0m ${v.id} - ${v.title.slice(0,32).padEnd(34)}\x1b[1;36m║\x1b[0m\n\x1b[1;36m║\x1b[0m           ${statusIcon} ${v.affected.padEnd(40)}\x1b[1;36m║\x1b[0m`
-}).join('\n')}
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;33mRecommendation:\x1b[0m Run \x1b[36mzsec harden\x1b[0m to apply security patches        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                     Run \x1b[36mzpkg update\x1b[0m to update vulnerable packages       \x1b[1;36m║\x1b[0m
-\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
-      }
-      if (args[0] === 'harden') {
-        return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║              \x1b[1;32mZ-OS Security Hardening - In Progress\x1b[1;36m                       ║\x1b[0m
-\x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Enabling ASLR with full randomization...                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Activating NX bit on all memory segments...                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Enabling Stack Smashing Protector (SSP) - strong mode...      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Enabling FORTIFY_SOURCE=2 on all binaries...                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Enabling PIE (Position Independent Executables)...              \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Enabling full RELRO (RELocation Read-Only)...                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Enabling SECCOMP strict mode...                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Enabling AppArmor profiles for all services...                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Rotating encryption keys...                                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Patching ZVE-2026-001 (Kernel Privilege Escalation)...         \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Patching ZVE-2026-003 (SSH Key Confusion)...                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Patching ZVE-2026-005 (/proc info leak)...                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Patching ZVE-2026-007 (Package Signature Bypass)...            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Disabling unnecessary kernel modules...                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Setting kernel.unprivileged_bpf_disabled=1...                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Setting kernel.kptr_restrict=2...                               \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Setting kernel.dmesg_restrict=1...                              \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32m✓\x1b[0m Enabling AI threat detection auto-response...                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;32mHardening Complete! Security Score: 98/100\x1b[0m                       \x1b[1;36m║\x1b[0m
-\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
-      }
-      if (args[0] === 'audit') {
-        return { output: `\x1b[1;36mZ-OS Security Audit Log\x1b[0m
-────────────────────────────────────────────────────────
-\x1b[32m[2026-06-22 10:00:01]\x1b[0m System boot - All security modules loaded
-\x1b[32m[2026-06-22 10:00:02]\x1b[0m z-kernel-guard: Monitoring 342 syscalls
-\x1b[32m[2026-06-22 10:00:03]\x1b[0m z-firewall: 247 rules loaded, AI-model active
-\x1b[32m[2026-06-22 10:00:04]\x1b[0m z-quantum-crypto: AES-256-GCM keys rotated
-\x1b[33m[2026-06-22 10:15:22]\x1b[0m z-ai-detect: Anomalous connection from 185.220.101.42
-\x1b[31m[2026-06-22 10:15:23]\x1b[0m z-firewall: BLOCKED 185.220.101.42 (Tor exit node)
-\x1b[32m[2026-06-22 10:30:45]\x1b[0m z-auditd: Privileged operation by root (apt update)
-\x1b[33m[2026-06-22 11:02:11]\x1b[0m z-ai-detect: Port scan detected from 45.33.32.156
-\x1b[31m[2026-06-22 11:02:12]\x1b[0m z-firewall: BLOCKED 45.33.32.156 (port scanner)
-\x1b[32m[2026-06-22 11:30:00]\x1b[0m z-quantum-crypto: Key rotation scheduled in 12h
-\x1b[32m[2026-06-22 12:00:00]\x1b[0m z-fs-monitor: ZFS scrub completed - 0 errors
-\x1b[33m[2026-06-22 12:15:33]\x1b[0m z-ai-detect: Brute force attempt on SSH from 103.21.244.0/24
-\x1b[31m[2026-06-22 12:15:34]\x1b[0m z-firewall: BLOCKED 103.21.244.0/24 (brute force)
-\x1b[32m[2026-06-22 12:45:00]\x1b[0m z-kernel-guard: Kernel integrity check passed` }
-      }
-      if (args[0] === 'encrypt') {
-        if (!args[1]) return { output: '\x1b[31mzsec encrypt: missing filename\x1b[0m' }
-        const filePath = resolvePath(args[1], session.cwd)
-        const node = getNodeAtPath(filePath)
-        if (!node) return { output: `\x1b[31mzsec encrypt: ${args[1]}: No such file\x1b[0m` }
-        node.encrypted = true
-        node.content = Buffer.from(node.content || '').toString('base64')
-        return { output: `\x1b[32mFile '${args[1]}' encrypted with AES-256-GCM\x1b[0m` }
-      }
-      if (args[0] === 'decrypt') {
-        if (!args[1]) return { output: '\x1b[31mzsec decrypt: missing filename\x1b[0m' }
-        const filePath = resolvePath(args[1], session.cwd)
-        const node = getNodeAtPath(filePath)
-        if (!node) return { output: `\x1b[31mzsec decrypt: ${args[1]}: No such file\x1b[0m` }
-        if (!node.encrypted) return { output: `\x1b[33mzsec decrypt: ${args[1]}: File is not encrypted\x1b[0m` }
-        node.encrypted = false
-        try { node.content = Buffer.from(node.content || '', 'base64').toString('utf8') } catch {}
-        return { output: `\x1b[32mFile '${args[1]}' decrypted successfully\x1b[0m` }
-      }
-      return { output: `\x1b[33mUsage: zsec [scan|harden|audit|encrypt|decrypt] [args]\x1b[0m` }
-    }
-
-    case 'zfirewall': {
-      if (args[0] === 'status' || args.length === 0) {
-        return { output: `\x1b[1;36mZ-Firewall Status - AI-Powered Next-Gen Firewall\x1b[0m
-────────────────────────────────────────────────────────
-Status:         \x1b[32mACTIVE\x1b[0m
-Policy:         \x1b[33mDEFAULT DENY\x1b[0m
-AI Engine:      \x1b[32mOnline\x1b[0m (z-threat-v3)
-Rules:          ${firewallRules.length} total, ${firewallRules.filter(r => r.enabled).length} active
-Blocked IPs:    12 entries
-Log Hits:       ${firewallRules.reduce((a, r) => a + r.logHits, 0).toLocaleString()} total
-
-\x1b[1;33mActive Rules:\x1b[0m
-${firewallRules.filter(r => r.enabled).map(r =>
-  `  ${r.action === 'allow' ? '\x1b[32mALLOW' : r.action === 'deny' ? '\x1b[31mDENY ' : '\x1b[33mREDIR'}\x1b[0m ${r.direction.padEnd(4)} ${r.protocol.padEnd(4)} ${r.source.padEnd(16)} -> ${r.destination.padEnd(16)} :${r.port} [${r.logHits} hits]`
-).join('\n')}
-
-\x1b[1;33mDisabled Rules:\x1b[0m
-${firewallRules.filter(r => !r.enabled).map(r =>
-  `  \x1b[90m${r.action.toUpperCase().padEnd(5)} ${r.direction.padEnd(4)} ${r.protocol.padEnd(4)} ${r.source.padEnd(16)} -> ${r.destination.padEnd(16)} :${r.port}\x1b[0m`
-).join('\n')}` }
-      }
-      if (args[0] === 'block' && args[1]) {
-        return { output: `\x1b[31mBlocked IP: ${args[1]}\x1b[0m - Rule added to firewall` }
-      }
-      if (args[0] === 'allow' && args[1]) {
-        return { output: `\x1b[32mAllowed IP: ${args[1]}\x1b[0m - Rule added to firewall` }
-      }
-      return { output: `\x1b[33mUsage: zfirewall [status|block|allow] [ip/port]\x1b[0m` }
-    }
-
-    case 'znet': {
-      if (args[0] === 'status' || args.length === 0) {
-        return { output: `\x1b[1;36mZ-Network Status\x1b[0m
-────────────────────────────────────────────────────────
-${networkInterfaces.map(i =>
-  `${i.status === 'up' ? '\x1b[32m▲' : '\x1b[31m▼'} ${i.name.padEnd(10)} ${i.ip.padEnd(16)} ${i.mac.padEnd(19)} ${i.speed.padEnd(8)} ${i.type}\x1b[0m\n  RX: ${(i.rxBytes/1024/1024).toFixed(1)} MB  TX: ${(i.txBytes/1024/1024).toFixed(1)} MB`
-).join('\n\n')}
-
-DNS: 1.1.1.1, 8.8.8.8 (DoH enabled, DNSSEC validating)
-Gateway: 10.0.0.254` }
-      }
-      if (args[0] === 'scan') {
-        const target = args[1] || 'localhost'
-        return { output: `\x1b[1;36mZ-Network Port Scan: ${target}\x1b[0m
-────────────────────────────────────────────────────────
-Port     State     Service         Version
-22/tcp   \x1b[32mopen\x1b[0m      ssh             Z-OpenSSH 9.8p1
-80/tcp   \x1b[32mopen\x1b[0m      http            nginx 1.27.0
-443/tcp  \x1b[32mopen\x1b[0m      https           nginx 1.27.0
-3000/tcp \x1b[32mopen\x1b[0m      z-desktop       Z-Desktop 3.0
-3306/tcp \x1b[33mfiltered\x1b[0m  mysql           (firewall)
-5432/tcp \x1b[31mclosed\x1b[0m    postgresql
-8080/tcp \x1b[32mopen\x1b[0m      z-proxy         Z-Proxy 1.0
-9090/tcp \x1b[33mfiltered\x1b[0m  z-admin         (firewall)
-
-Scan complete: 4 open, 2 filtered, 1 closed` }
-      }
-      if (args[0] === 'dns') {
-        const domain = args[1] || 'z-os.cloud'
-        return { output: `\x1b[1;36mDNS Lookup: ${domain}\x1b[0m
-────────────────────────────────────────────────────────
-Question:    ${domain} IN A
-Answer:      ${domain} 300 IN A 93.184.216.34
-Authority:   ${domain} 3600 IN NS ns1.z-os.cloud
-Additional:  ns1.z-os.cloud 3600 IN A 93.184.216.1
-DNSSEC:      \x1b[32mvalidated\x1b[0m (RSASHA256)
-DoH:         \x1b[32menabled\x1b[0m (https://dns.z-os.cloud/dns-query)
-Query time:  3 ms
-Server:      1.1.1.1#53 (Cloudflare)` }
-      }
-      if (args[0] === 'trace') {
-        const target = args[1] || 'z-os.cloud'
-        return { output: `\x1b[1;36mTraceroute to ${target}\x1b[0m
-────────────────────────────────────────────────────────
- 1  _gateway (10.0.0.254)      0.5 ms   0.4 ms   0.3 ms
- 2  isp-router.net (72.14.215.85)  1.2 ms   1.1 ms   1.0 ms
- 3  core-backbone.net (4.69.210.49)  5.3 ms   5.1 ms   5.2 ms
- 4  exchange.nyc.net (206.223.115.1)  12.4 ms  12.2 ms  12.3 ms
- 5  cdn-edge.z-os.cloud (93.184.216.1)  11.8 ms  11.6 ms  11.7 ms
- 6  ${target} (93.184.216.34)  11.5 ms  11.3 ms  11.4 ms` }
-      }
-      return { output: `\x1b[33mUsage: znet [status|scan|dns|trace] [target]\x1b[0m` }
-    }
-
-    case 'zpkg': {
-      if (args[0] === 'list') {
-        const installed = packageDB.filter(p => p.installed)
-        const available = packageDB.filter(p => !p.installed)
-        return { output: `\x1b[1;36mZ-Package Manager - Package List\x1b[0m
-────────────────────────────────────────────────────────
-\x1b[1;32mInstalled (${installed.length}):\x1b[0m
-${installed.map(p => `  \x1b[32m✓\x1b[0m ${p.name.padEnd(18)} ${p.version.padEnd(12)} ${p.description}`).join('\n')}
-
-\x1b[1;33mAvailable (${available.length}):\x1b[0m
-${available.map(p => `  ○ ${p.name.padEnd(18)} ${p.version.padEnd(12)} ${p.description}`).join('\n')}
-
-Repository: z-os-quantum | Total packages: 42,000+` }
-      }
-      if (args[0] === 'install' && args[1]) {
-        const pkg = packageDB.find(p => p.name === args[1])
-        if (!pkg) return { output: `\x1b[31mzpkg: package '${args[1]}' not found\x1b[0m` }
-        if (pkg.installed) return { output: `\x1b[33mzpkg: '${args[1]}' is already installed\x1b[0m` }
-        pkg.installed = true
-        return { output: `\x1b[32mInstalling ${args[1]}-${pkg.version}...\x1b[0m
-Resolving dependencies... done
-Downloading... done (${pkg.size})
-Verifying signature... \x1b[32mpassed\x1b[0m
-Extracting... done
-Configuring... done
-\x1b[32m${args[1]}-${pkg.version} installed successfully.\x1b[0m` }
-      }
-      if (args[0] === 'remove' && args[1]) {
-        const pkg = packageDB.find(p => p.name === args[1])
-        if (!pkg || !pkg.installed) return { output: `\x1b[31mzpkg: '${args[1]}' is not installed\x1b[0m` }
-        pkg.installed = false
-        return { output: `\x1b[32mRemoving ${args[1]}...\x1b[0m
-Stopping services... done
-Removing files... done
-Cleaning config... done
-\x1b[32m${args[1]} removed successfully.\x1b[0m` }
-      }
-      if (args[0] === 'update') {
-        return { output: `\x1b[32mChecking for updates...\x1b[0m
-Fetching package lists... done
-Calculating upgrade... done
-3 packages can be upgraded:
-  z-firewall     3.1.1 -> 3.1.2
-  z-ai-detect    3.0.0 -> 3.0.1
-  nginx          1.26.0 -> 1.27.0
-Downloading... done
-Upgrading... done
-\x1b[32m3 packages upgraded. 0 security vulnerabilities remaining.\x1b[0m` }
-      }
-      if (args[0] === 'search' && args[1]) {
-        const results = packageDB.filter(p => p.name.includes(args[1]) || p.description.toLowerCase().includes(args[1].toLowerCase()))
-        if (results.length === 0) return { output: `\x1b[33mNo packages found matching '${args[1]}'\x1b[0m` }
-        return { output: results.map(p => `  ${p.installed ? '\x1b[32m✓' : '○'}\x1b[0m ${p.name.padEnd(18)} ${p.version.padEnd(12)} ${p.description}`).join('\n') }
-      }
-      return { output: `\x1b[33mUsage: zpkg [list|install|remove|update|search] [package]\x1b[0m` }
-    }
-
-    case 'zservice': {
-      if (args[0] === 'list' || args.length === 0) {
-        return { output: `\x1b[1;36mZ-OS Service Manager\x1b[0m
-────────────────────────────────────────────────────────
-${systemServices.map(s => {
-  const statusIcon = s.status === 'active' ? '\x1b[32m●' : s.status === 'failed' ? '\x1b[31m●' : s.status === 'loading' ? '\x1b[33m◎' : '\x1b[90m○'
-  return `${statusIcon}\x1b[0m ${s.name.padEnd(18)} ${s.status.padEnd(8)} ${s.type.padEnd(10)} ${s.description}`
-}).join('\n')}` }
-      }
-      if (args[0] === 'start' && args[1]) {
-        const svc = systemServices.find(s => s.name === args[1])
-        if (!svc) return { output: `\x1b[31mzservice: '${args[1]}' not found\x1b[0m` }
-        svc.status = 'active'
-        return { output: `\x1b[32mService '${args[1]}' started successfully.\x1b[0m` }
-      }
-      if (args[0] === 'stop' && args[1]) {
-        const svc = systemServices.find(s => s.name === args[1])
-        if (!svc) return { output: `\x1b[31mzservice: '${args[1]}' not found\x1b[0m` }
-        svc.status = 'inactive'
-        return { output: `\x1b[33mService '${args[1]}' stopped.\x1b[0m` }
-      }
-      if (args[0] === 'restart' && args[1]) {
-        const svc = systemServices.find(s => s.name === args[1])
-        if (!svc) return { output: `\x1b[31mzservice: '${args[1]}' not found\x1b[0m` }
-        svc.status = 'loading'
-        setTimeout(() => { svc.status = 'active' }, 1000)
-        return { output: `\x1b[33mService '${args[1]}' restarting...\x1b[0m` }
-      }
-      return { output: `\x1b[33mUsage: zservice [list|start|stop|restart] [service]\x1b[0m` }
-    }
-
-    case 'zps': {
-      const procs = generateProcesses()
-      return { output: `\x1b[1;36mZ-OS Process Viewer (AI-Optimized)\x1b[0m
-────────────────────────────────────────────────────────
-PID     USER       CPU%   MEM%   STATUS    PRI   THREADS  NAME
-${procs.map(p => {
-  const statusColor = p.status === 'running' ? '\x1b[32m' : p.status === 'zombie' ? '\x1b[31m' : '\x1b[33m'
-  return `${String(p.pid).padStart(5)}   ${p.user.padEnd(8)} ${p.cpu.toFixed(1).padStart(5)}  ${p.memory.toFixed(1).padStart(5)}  ${statusColor}${p.status.padEnd(8)}\x1b[0m ${String(p.priority).padStart(3)}   ${String(p.threads).padStart(7)}  ${p.name}`
-}).join('\n')}
-
-Total: ${procs.length} processes, ${procs.reduce((a,p) => a+p.threads, 0)} threads` }
-    }
-
-    case 'ztour': {
-      return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║              \x1b[1;33mWelcome to Z-OS Interactive Tour!\x1b[1;36m                        ║\x1b[0m
-\x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;32mZ-OS\x1b[0m is a next-generation operating system that surpasses   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Linux in every aspect. Here is what makes it superior:       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33m1. AI-Powered Kernel\x1b[0m                                           \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     The z-kernel uses AI for intelligent process scheduling,    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     achieving 40% faster context switches than Linux.           \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33m2. Quantum-Resistant Security\x1b[0m                                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Built-in Kyber-1024 encryption protects against quantum     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     computer attacks. Linux still relies on RSA.                 \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33m3. Self-Healing Filesystem\x1b[0m                                    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     ZFS with AI auto-repair detects and fixes corruption in      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     real-time. Linux ext4 has no such capability.                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33m4. Zero-Trust Architecture\x1b[0m                                    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Every process is sandboxed at kernel level. Linux relies    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     on optional SELinux/AppArmor that most users disable.         \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33m5. Real-Time Kernel Patching\x1b[0m                                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Patch security vulnerabilities without rebooting. Linux     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     requires Kernel Live Patching with paid subscriptions.        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33m6. AI Threat Detection\x1b[0m                                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     99.97% accuracy in detecting zero-day attacks. Linux        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m]     requires separate IDS/IPS installation.                       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Try these commands to explore:                                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m    \x1b[36mzsysinfo\x1b[0m    - Full system information                       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m    \x1b[36mzsec scan\x1b[0m   - Security vulnerability scan                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m    \x1b[36mzfirewall\x1b[0m  - AI firewall management                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m    \x1b[36mznet status\x1b[0m - Network interface status                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m    \x1b[36mzpkg list\x1b[0m  - Package manager                               \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m    \x1b[36mzservice\x1b[0m   - Service management                           \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m    \x1b[36mzps\x1b[0m        - Advanced process viewer                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m    \x1b[36mneofetch\x1b[0m   - System info with ASCII art                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
-    }
-
-    case 'zbenchmark': {
-      return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║              \x1b[1;33mZ-OS vs Linux Benchmark Results\x1b[1;36m                             ║\x1b[0m
-\x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;33mTest                    Z-OS 3.0     Linux 6.5     Winner\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  ──────────────────────────────────────────────────────────── \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Context Switch         \x1b[32m0.8μs\x1b[0m        1.3μs          \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Syscall Latency        \x1b[32m0.15μs\x1b[0m       0.24μs         \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Process Creation       \x1b[32m0.3ms\x1b[0m        0.5ms          \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  File I/O (seq read)    \x1b[32m3.2GB/s\x1b[0m      2.8GB/s        \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  File I/O (random)      \x1b[32m1.8GB/s\x1b[0m      1.2GB/s        \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Memory Allocation      \x1b[32m45ns\x1b[0m        78ns           \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Network Throughput     \x1b[32m9.8Gbps\x1b[0m      8.2Gbps        \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Encryption (AES-256)   \x1b[32m12GB/s\x1b[0m       8GB/s          \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Boot Time              \x1b[32m1.2s\x1b[0m        3.8s           \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Container Startup      \x1b[32m80ms\x1b[0m        350ms          \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Security Scan          \x1b[32m2.3s\x1b[0m        12.5s          \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Threat Detection       \x1b[32m99.97%\x1b[0m       94.2%          \x1b[32mZ-OS\x1b[0m       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;32mZ-OS wins 12/12 benchmarks against Linux\x1b[0m                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
-    }
-
-    case 'zhistory': {
-      return { output: session.history.length === 0
-        ? '\x1b[33mNo command history yet.\x1b[0m'
-        : session.history.map((cmd, i) => `  ${String(i + 1).padStart(4)}  ${cmd}`).join('\n')
-      }
-    }
-
-    case 'alias': {
-      if (args.length === 0) {
-        const aliases = Object.entries(session.aliases)
-        return { output: aliases.length === 0
-          ? '\x1b[33mNo aliases defined. Usage: alias name="command"\x1b[0m'
-          : aliases.map(([k, v]) => `  alias ${k}='${v}'`).join('\n')
-        }
-      }
-      const aliasDef = args.join(' ')
-      const eqIdx = aliasDef.indexOf('=')
-      if (eqIdx === -1) return { output: '\x1b[31malias: invalid format. Usage: alias name="command"\x1b[0m' }
-      const name = aliasDef.slice(0, eqIdx).trim()
-      const value = aliasDef.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '')
-      session.aliases[name] = value
-      return { output: `\x1b[32malias ${name}='${value}' created\x1b[0m` }
-    }
-
-    case 'export': {
-      if (args.length === 0) {
-        return { output: Object.entries(session.env).map(([k, v]) => `  export ${k}="${v}"`).join('\n') }
-      }
-      const expDef = args.join(' ')
-      const eqIdx = expDef.indexOf('=')
-      if (eqIdx === -1) return { output: '\x1b[31mexport: invalid format. Usage: export VAR="value"\x1b[0m' }
-      const name = expDef.slice(0, eqIdx).trim()
-      const value = expDef.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '')
-      session.env[name] = value
-      return { output: '' }
-    }
-
-    case 'env':
-      return { output: Object.entries({ ...session.env, ...session.variables }).map(([k, v]) => `${k}=${v}`).join('\n') }
-
-    case 'tree': {
-      const targetPath = args[0] ? resolvePath(args[0], session.cwd) : session.cwd
-      const node = getNodeAtPath(targetPath)
-      if (!node || node.type !== 'directory') return { output: `\x1b[31mtree: '${targetPath}': Not a directory\x1b[0m` }
-      const lines: string[] = [targetPath]
-      function walk(n: FileSystemNode, prefix: string) {
-        if (!n.children) return
-        const entries = Array.from(n.children.values())
-        entries.forEach((e, i) => {
-          const isLast = i === entries.length - 1
-          const connector = isLast ? '└── ' : '├── '
-          const color = e.type === 'directory' ? '\x1b[1;34m' : e.type === 'symlink' ? '\x1b[1;36m' : ''
-          lines.push(`${prefix}${connector}${color}${e.name}${e.type === 'directory' ? '/' : ''}\x1b[0m`)
-          if (e.type === 'directory') walk(e, prefix + (isLast ? '    ' : '│   '))
-        })
-      }
-      walk(node, '')
-      return { output: lines.join('\n') }
-    }
-
-    case 'head': {
-      if (!args[0]) return { output: '\x1b[31mhead: missing operand\x1b[0m' }
-      const n = args.includes('-n') ? parseInt(args[args.indexOf('-n') + 1]) || 10 : 10
-      const file = args.find(a => !a.startsWith('-') && !a.match(/^\d+$/)) || args[args.length - 1]
-      const filePath = resolvePath(file, session.cwd)
-      const node = getNodeAtPath(filePath)
-      if (!node || node.type === 'directory') return { output: `\x1b[31mhead: ${file}: No such file\x1b[0m` }
-      return { output: (node.content || '').split('\n').slice(0, n).join('\n') }
-    }
-
-    case 'tail': {
-      if (!args[0]) return { output: '\x1b[31mtail: missing operand\x1b[0m' }
-      const n = args.includes('-n') ? parseInt(args[args.indexOf('-n') + 1]) || 10 : 10
-      const file = args.find(a => !a.startsWith('-') && !a.match(/^\d+$/)) || args[args.length - 1]
-      const filePath = resolvePath(file, session.cwd)
-      const node = getNodeAtPath(filePath)
-      if (!node || node.type === 'directory') return { output: `\x1b[31mtail: ${file}: No such file\x1b[0m` }
-      return { output: (node.content || '').split('\n').slice(-n).join('\n') }
-    }
-
-    case 'wc': {
-      if (!args[0]) return { output: '\x1b[31mwc: missing operand\x1b[0m' }
-      const filePath = resolvePath(args[0], session.cwd)
-      const node = getNodeAtPath(filePath)
-      if (!node || node.type === 'directory') return { output: `\x1b[31mwc: ${args[0]}: No such file\x1b[0m` }
-      const content = node.content || ''
-      return { output: `  ${content.split('\n').length}  ${content.split(/\s+/).filter(Boolean).length}  ${content.length} ${args[0]}` }
-    }
-
-    case 'ping': {
-      const host = args[0] || 'z-os.cloud'
-      return { output: `PING ${host} (93.184.216.34) 56(84) bytes of data.
-64 bytes from ${host}: icmp_seq=1 ttl=56 time=3.2 ms
-64 bytes from ${host}: icmp_seq=2 ttl=56 time=2.8 ms
-64 bytes from ${host}: icmp_seq=3 ttl=56 time=3.1 ms
-
---- ${host} ping statistics ---
-3 packets transmitted, 3 received, 0% packet loss, time 2003ms
-rtt min/avg/max/mdev = 2.800/3.033/3.200/0.171 ms` }
+      return { output: `\x1b[1;33m            .-/+oossssoo+/-.\x1b[0m       \x1b[1;33mubuntu\x1b[0m@\x1b[1;33mubuntu-server\x1b[0m
+\x1b[1;33m        \`:+sssssssssssssssssss+:\`\x1b[0m   ─────────────────
+\x1b[1;33m      -+sssssssssssssssssssssss+-\x1b[0m   \x1b[1;33mOS:\x1b[0m Ubuntu 24.04 LTS x86_64
+\x1b[1;33m    .ossssssssssssssssssssssssso.\x1b[0m    \x1b[1;33mHost:\x1b[0m KVM/QEMU Virtual Machine
+\x1b[1;33m   +sssssssssssssssssssssssssssss+\x1b[0m   \x1b[1;33mKernel:\x1b[0m 6.8.0-45-generic
+\x1b[1;33m  .ossssssssssssssssssssssssssssso.\x1b[0m   \x1b[1;33mUptime:\x1b[0m ${formatUptime(m.uptime)}
+\x1b[1;33m  +sssssssssssssssssssssssssssss+\x1b[0m    \x1b[1;33mPackages:\x1b[0m ${packageDB.filter(p => p.installed).length} (apt)
+\x1b[1;33m  .ossssssssssssssssssssssssssssso.\x1b[0m   \x1b[1;33mShell:\x1b[0m bash 5.2.21
+\x1b[1;33m   +sssssssssssssssssssssssssssss+\x1b[0m   \x1b[1;33mTerminal:\x1b[0m xterm-256color
+\x1b[1;33m    .ossssssssssssssssssssssssso.\x1b[0m    \x1b[1;33mCPU:\x1b[0m Intel Xeon (4) @ 2.800GHz
+\x1b[1;33m     -+sssssssssssssssssssssss+-\x1b[0m    \x1b[1;33mMemory:\x1b[0m ${Math.floor(m.memUsed/1024*4)}MiB / 16384MiB
+\x1b[1;33m       \`:+sssssssssssssssssss+:\`\x1b[0m
+\x1b[1;33m            .-/+oossssoo+/-.\x1b[0m       \x1b[40m   \x1b[41m   \x1b[42m   \x1b[43m   \x1b[44m   \x1b[45m   \x1b[46m   \x1b[47m   \x1b[0m
+                                        \x1b[40m   \x1b[41m   \x1b[42m   \x1b[43m   \x1b[44m   \x1b[45m   \x1b[46m   \x1b[47m   \x1b[0m` }
     }
 
     case 'clear':
       return { output: '', action: 'clear' }
 
     case 'exit':
-      return { output: '\x1b[33mConnection closed. Goodbye from Z-OS!\x1b[0m', action: 'disconnect' }
+      return { output: '\x1b[33mlogout\nConnection to ubuntu-server closed.\x1b[0m', action: 'disconnect' }
 
     case 'history':
       return { output: session.history.map((cmd, i) => `  ${String(i + 1).padStart(4)}  ${cmd}`).join('\n') }
 
-    case 'id':
-      return { output: `uid=1000(z-user) gid=1000(z-user) groups=1000(z-user),27(sudo),33(www-data)` }
+    case 'id': {
+      if (session.isRoot) {
+        return { output: `uid=0(root) gid=0(root) groups=0(root)` }
+      }
+      return { output: `uid=1000(ubuntu) gid=1000(ubuntu) groups=1000(ubuntu),4(adm),24(cdrom),27(sudo),30(dip),46(plugdev)` }
+    }
 
     case 'which': {
       if (!args[0]) return { output: '\x1b[31mwhich: missing argument\x1b[0m' }
-      const bins = ['zsh', 'zpkg', 'znet', 'zsec', 'zmon', 'bash', 'ls', 'cat', 'grep', 'find', 'ps', 'top', 'kill', 'chmod', 'chown', 'nano', 'vim', 'python3', 'node', 'gcc', 'git', 'curl', 'wget', 'docker']
+      const bins = ['bash', 'apt', 'systemctl', 'ufw', 'ip', 'ss', 'dpkg', 'ls', 'cat', 'grep', 'find', 'ps', 'top', 'kill', 'chmod', 'chown', 'nano', 'vim', 'python3', 'node', 'gcc', 'git', 'curl', 'wget', 'docker', 'ssh', 'startx', 'sudo']
       if (bins.includes(args[0])) return { output: `/usr/bin/${args[0]}` }
-      return { output: `\x1b[31mwhich: no ${args[0]} in PATH\x1b[0m` }
+      return { output: `\x1b[31mwhich: no ${args[0]} in (/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin)\x1b[0m` }
     }
 
     case 'man': {
       if (!args[0]) return { output: '\x1b[33mWhat manual page do you want?\x1b[0m' }
-      return { output: `\x1b[1;36mZ-OS Manual - ${args[0].toUpperCase()}\x1b[0m
+      return { output: `\x1b[1;36m${args[0].toUpperCase()}(1)\x1b[0m
 
 NAME
-    ${args[0]} - Z-OS system command
+    ${args[0]} - system command
 
 DESCRIPTION
-    This command is part of the Z-OS Quantum operating system.
-    For detailed documentation, visit https://docs.z-os.cloud/commands/${args[0]}
+    See \`info ${args[0]}\` or \`${args[0]} --help\` for more information.
 
 SEE ALSO
-    zsysinfo(1), zsec(8), zpkg(1), znet(8)` }
+    bash(1), apt(8), systemctl(1)` }
     }
 
-    case 'sudo':
-      return { output: `\x1b[33m[sudo] password for ${session.username}: \x1b[0m
-\x1b[32mZ-OS uses zero-trust architecture. Elevated privileges require multi-factor authentication.\x1b[0m
-\x1b[33mPlease use 'zauth' for privilege escalation.\x1b[0m` }
+    case 'sudo': {
+      if (!args[0]) return { output: '\x1b[31musage: sudo [-hknV] command\x1b[0m' }
+      const savedIsRoot = session.isRoot
+      session.isRoot = true
+      const savedUsername = session.username
+      session.username = 'root'
+      const result = executeSingleCommand(args[0], args.slice(1), session, pipeInput)
+      session.isRoot = savedIsRoot
+      session.username = savedUsername
+      return result
+    }
 
     // ═══════════════════════════════
-    // PHASE 1: ADVANCED FILESYSTEM
+    // APT PACKAGE MANAGER
+    // ═══════════════════════════════
+
+    case 'apt': {
+      const subcmd = args[0]
+      if (subcmd === 'update') {
+        return { output: `\x1b[33mHit:1 http://archive.ubuntu.com/ubuntu noble InRelease\x1b[0m
+\x1b[33mHit:2 http://archive.ubuntu.com/ubuntu noble-updates InRelease\x1b[0m
+\x1b[33mHit:3 http://archive.ubuntu.com/ubuntu noble-backports InRelease\x1b[0m
+\x1b[33mHit:4 http://security.ubuntu.com/ubuntu noble-security InRelease\x1b[0m
+Reading package lists... Done
+Building dependency tree... Done
+All packages are up to date.` }
+      }
+      if (subcmd === 'upgrade') {
+        return { output: `Reading package lists... Done
+Building dependency tree... Done
+Calculating upgrade... Done
+0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.` }
+      }
+      if (subcmd === 'install' && args[1]) {
+        const pkgName = args[1]
+        const pkg = packageDB.find(p => p.name === pkgName)
+        if (pkg && pkg.installed) {
+          return { output: `Reading package lists... Done
+Building dependency tree... Done
+${pkgName} is already the newest version (${pkg.version}).
+0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.` }
+        }
+        const version = pkg ? pkg.version : '1.0.0-1ubuntu1'
+        const size = pkg ? pkg.size : '256 kB'
+        const sizeBytes = parseInt(size) * (size.includes('MB') ? 1048576 : size.includes('kB') ? 1024 : 1)
+        const needSize = size.includes('MB') ? `${(sizeBytes/1048576).toFixed(1)} MB` : size.includes('kB') ? `${(sizeBytes/1024).toFixed(0)} kB` : size
+        const deps = pkg && pkg.dependencies.length > 0 ? `\n  ${pkg.dependencies.join(' ')}` : ''
+        return { output: `Reading package lists... Done
+Building dependency tree... Done
+The following NEW packages will be installed:
+  ${pkgName}${deps}
+0 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.
+Need to get ${needSize} of archives.
+After this operation, ${needSize} of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu noble/main amd64 ${pkgName} amd64 ${version} [${needSize}]\x1b[0m
+Fetched ${needSize} in 1s (${size}/s)
+Selecting previously unselected package ${pkgName}.
+(Reading database ... 145234 files and directories currently installed.)
+Preparing to unpack .../${pkgName}_${version}_amd64.deb ...
+Unpacking ${pkgName} (${version}) ...
+Setting up ${pkgName} (${version}) ...` }
+      }
+      if (subcmd === 'remove' && args[1]) {
+        const pkgName = args[1]
+        const pkg = packageDB.find(p => p.name === pkgName)
+        if (!pkg || !pkg.installed) {
+          return { output: `\x1b[31mE: Package '${pkgName}' is not installed\x1b[0m` }
+        }
+        return { output: `Reading package lists... Done
+Building dependency tree... Done
+The following packages will be REMOVED:
+  ${pkgName}
+0 upgraded, 0 newly installed, 1 to remove and 0 not upgraded.
+After this operation, ${pkg.size} disk space will be freed.
+(Reading database ... 145234 files and directories currently installed.)
+Removing ${pkgName} (${pkg.version}) ...` }
+      }
+      if (subcmd === 'search' && args[1]) {
+        const term = args[1].toLowerCase()
+        const results = packageDB.filter(p => p.name.toLowerCase().includes(term) || p.description.toLowerCase().includes(term))
+        if (results.length === 0) {
+          return { output: `Sorting... Done
+Full Text Search... Done` }
+        }
+        return { output: `Sorting... Done
+Full Text Search... Done
+${results.map(p => `${p.name}/${p.repository} ${p.version} amd64\n  ${p.description}`).join('\n\n')}` }
+      }
+      if (subcmd === 'list') {
+        const installed = args.includes('--installed')
+        const pkgs = installed ? packageDB.filter(p => p.installed) : packageDB
+        return { output: `Listing... Done
+${pkgs.map(p => `${p.name}/${p.repository} ${p.version} ${p.installed ? '[installed]' : ''}`).join('\n')}` }
+      }
+      if (subcmd === 'show' && args[1]) {
+        const pkgName = args[1]
+        const pkg = packageDB.find(p => p.name === pkgName)
+        if (!pkg) return { output: `\x1b[31mE: Unable to locate package ${pkgName}\x1b[0m` }
+        return { output: `Package: ${pkg.name}
+Version: ${pkg.version}
+Priority: optional
+Section: ${pkg.category}
+Installed-Size: ${pkg.size}
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Architecture: amd64
+Depends: ${pkg.dependencies.join(', ') || 'none'}
+Description: ${pkg.description}
+Original-Maintainer: Debian/Ubuntu Maintainers` }
+      }
+      return { output: `Usage: apt [options] command
+
+apt is a commandline package manager and provides commands for
+searching and managing as well as querying information about packages.
+
+Commands:
+  update      - Update package lists
+  upgrade     - Upgrade installed packages
+  install     - Install new packages
+  remove      - Remove packages
+  search      - Search in package descriptions
+  list        - List packages
+  show        - Show package details` }
+    }
+
+    // ═══════════════════════════════
+    // SYSTEMCTL
+    // ═══════════════════════════════
+
+    case 'systemctl': {
+      const subcmd = args[0]
+      if (subcmd === 'list-units' || (!subcmd)) {
+        return { output: `  UNIT                    LOAD   ACTIVE SUB     DESCRIPTION
+  systemd-journald.service loaded active running Journal Service
+  systemd-udevd.service    loaded active running udev Kernel Device Manager
+  systemd-timesyncd.service loaded active running Network Time Synchronization
+  dbus.service             loaded active running D-Bus System Message Bus
+  systemd-logind.service   loaded active running Login Service
+  NetworkManager.service   loaded active running Network Manager
+  ssh.service              loaded active running OpenBSD Secure Shell server
+  nginx.service            loaded active running A high performance web server
+  ufw.service              loaded active running Uncomplicated Firewall
+  cron.service             loaded active running Regular background program
+  rsyslog.service          loaded active running System Logging Service
+  snapd.service            loaded active running Snap Daemon
+  accounts-daemon.service  loaded active running Accounts Service
+  docker.service           loaded inactive dead    Docker Application Container
+  postgresql.service       loaded inactive dead    PostgreSQL RDBMS
+  mysql.service            loaded inactive dead    MySQL Community Server
+
+16 loaded units listed.` }
+      }
+      if (subcmd === 'start' && args[1]) {
+        const svc = systemServices.find(s => s.name === args[1])
+        if (svc) {
+          svc.status = 'active'
+          return { output: `` }
+        }
+        return { output: `\x1b[31mFailed to start ${args[1]}.service: Unit ${args[1]}.service not found.\x1b[0m` }
+      }
+      if (subcmd === 'stop' && args[1]) {
+        const svc = systemServices.find(s => s.name === args[1])
+        if (svc) {
+          svc.status = 'inactive'
+          return { output: `` }
+        }
+        return { output: `\x1b[31mFailed to stop ${args[1]}.service: Unit ${args[1]}.service not found.\x1b[0m` }
+      }
+      if (subcmd === 'restart' && args[1]) {
+        const svc = systemServices.find(s => s.name === args[1])
+        if (svc) {
+          return { output: `` }
+        }
+        return { output: `\x1b[31mFailed to restart ${args[1]}.service: Unit ${args[1]}.service not found.\x1b[0m` }
+      }
+      if (subcmd === 'status' && args[1]) {
+        const svc = systemServices.find(s => s.name === args[1])
+        if (!svc) return { output: `\x1b[31mUnit ${args[1]}.service could not be found.\x1b[0m` }
+        const activeStr = svc.status === 'active' ? '\x1b[32mactive (running)\x1b[0m' : svc.status === 'inactive' ? '\x1b[31minactive (dead)\x1b[0m' : '\x1b[33mfailed\x1b[0m'
+        const pidStr = svc.pid ? `   Main PID: ${svc.pid}` : ''
+        return { output: `\x1b[1m● ${svc.name}.service\x1b[0m - ${svc.description}
+     Loaded: loaded (/lib/systemd/system/${svc.name}.service; ${svc.autoStart ? 'enabled' : 'disabled'}; vendor preset: enabled)
+     Active: ${activeStr}
+${pidStr}
+   CGroup: /system.slice/${svc.name}.service` }
+      }
+      if (subcmd === 'enable' && args[1]) {
+        const svc = systemServices.find(s => s.name === args[1])
+        if (svc) {
+          svc.autoStart = true
+          return { output: `Created symlink /etc/systemd/system/multi-user.target.wants/${args[1]}.service → /lib/systemd/system/${args[1]}.service.` }
+        }
+        return { output: `\x1b[31mFailed to enable unit: Unit ${args[1]}.service not found.\x1b[0m` }
+      }
+      if (subcmd === 'disable' && args[1]) {
+        const svc = systemServices.find(s => s.name === args[1])
+        if (svc) {
+          svc.autoStart = false
+          return { output: `Removed /etc/systemd/system/multi-user.target.wants/${args[1]}.service.` }
+        }
+        return { output: `\x1b[31mFailed to disable unit: Unit ${args[1]}.service not found.\x1b[0m` }
+      }
+      return { output: `Usage: systemctl [command] [unit]
+
+Commands:
+  list-units   List units
+  start        Start a unit
+  stop         Stop a unit
+  restart      Restart a unit
+  status       Show unit status
+  enable       Enable auto-start
+  disable      Disable auto-start` }
+    }
+
+    // ═══════════════════════════════
+    // UFW FIREWALL
+    // ═══════════════════════════════
+
+    case 'ufw': {
+      const subcmd = args[0]
+      if (subcmd === 'status') {
+        if (!ufwEnabled) return { output: `Status: inactive` }
+        return { output: `Status: active
+
+To                         Action      From
+--                         ------      ----
+22/tcp                     ALLOW       Anywhere
+80/tcp                     ALLOW       Anywhere
+443/tcp                    ALLOW       Anywhere
+22/tcp (v6)                ALLOW       Anywhere (v6)
+80/tcp (v6)                ALLOW       Anywhere (v6)
+443/tcp (v6)               ALLOW       Anywhere (v6)` }
+      }
+      if (subcmd === 'allow' && args[1]) {
+        return { output: `Rule added
+Rule added (v6)` }
+      }
+      if (subcmd === 'deny' && args[1]) {
+        return { output: `Rule added
+Rule added (v6)` }
+      }
+      if (subcmd === 'enable') {
+        ufwEnabled = true
+        return { output: `Firewall is active and enabled on system startup` }
+      }
+      if (subcmd === 'disable') {
+        ufwEnabled = false
+        return { output: `Firewall stopped and disabled on system startup` }
+      }
+      return { output: `Usage: ufw [command]
+
+Commands:
+  status       Show firewall status
+  allow PORT   Allow traffic on port
+  deny PORT    Deny traffic on port
+  enable       Enable the firewall
+  disable      Disable the firewall` }
+    }
+
+    // ═══════════════════════════════
+    // IP COMMAND
+    // ═══════════════════════════════
+
+    case 'ip': {
+      if (args[0] === 'addr' || args[0] === 'a') {
+        return { output: `1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 00:1a:2b:3c:4d:5e brd ff:ff:ff:ff:ff:ff
+    altname enp0s3
+    inet 10.0.0.1/24 brd 10.0.0.255 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::21a:2bff:fe3c:4d5e/64 scope link
+       valid_lft forever preferred_lft forever` }
+      }
+      if (args[0] === 'link' || args[0] === 'l') {
+        return { output: `1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP mode DEFAULT group default qlen 1000
+    link/ether 00:1a:2b:3c:4d:5e brd ff:ff:ff:ff:ff:ff
+    altname enp0s3` }
+      }
+      return { output: `Usage: ip [ command ] [ arguments ]
+
+Commands:
+  addr   Show/manage addresses
+  link   Show/manage network devices` }
+    }
+
+    // ═══════════════════════════════
+    // SS COMMAND
+    // ═══════════════════════════════
+
+    case 'ss': {
+      if (args.includes('-tlnp') || args.includes('-t') || args.includes('-l')) {
+        return { output: `State    Recv-Q   Send-Q     Local Address:Port     Peer Address:Port  Process
+LISTEN   0        128              0.0.0.0:22            0.0.0.0:*      users:(("sshd",pid=567,fd=3))
+LISTEN   0        511              0.0.0.0:80            0.0.0.0:*      users:(("nginx",pid=890,fd=6))
+LISTEN   0        128              0.0.0.0:443           0.0.0.0:*      users:(("nginx",pid=890,fd=7))
+LISTEN   0        128                 [::]:22               [::]:*      users:(("sshd",pid=567,fd=4))
+LISTEN   0        511                 [::]:80               [::]:*      users:(("nginx",pid=890,fd=8))` }
+      }
+      return { output: `Netid  State   Recv-Q  Send-Q   Local Address:Port    Peer Address:Port` }
+    }
+
+    // ═══════════════════════════════
+    // DPKG COMMAND
+    // ═══════════════════════════════
+
+    case 'dpkg': {
+      if (args[0] === '-l' || args[0] === '--list') {
+        return { output: `Desired=Unknown/Install/Remove/Purge/Hold
+| Status=Not/Inst/Conf-files/Unpacked/halF-conf/Half-inst/trig-aWait/Trig-pend
+|/ Err?=(none)/Reinst-required (Status,Err: uppercase=bad)
+||/ Name                   Version                     Architecture Description
++++-======================-===========================-============-=================================
+ii  adduser                3.137ubuntu1                all          add and remove users and groups
+ii  apt                    2.7.14build2                amd64        commandline package manager
+ii  base-files             13ubuntu10                  amd64        Debian base system miscellaneous files
+ii  base-passwd            3.6.3build1                 amd64        Debian base system master password and group files
+ii  bash                   5.2.21-2ubuntu4             amd64        GNU Bourne Again SHell
+ii  bsdutils               1:2.39.3-9ubuntu6          amd64        basic utilities from 4.4BSD-Lite
+ii  coreutils              9.4-3ubuntu6                amd64        GNU core utilities
+ii  curl                   8.5.0-2ubuntu10             amd64        command line tool for transferring data
+ii  dpkg                   1.22.6ubuntu5               amd64        Debian package management system
+ii  gcc-13-base            13.2.0-23ubuntu4            amd64        GCC, the GNU Compiler Collection (base package)
+ii  git                    1:2.43.0-1ubuntu7           amd64        distributed version control system
+ii  gpgv                   2.4.4-2ubuntu17             amd64        GNU privacy guard - signature verification tool
+ii  grep                   3.11-4build1                amd64        GNU grep, egrep and fgrep
+ii  gzip                   1.12-1ubuntu3               amd64        GNU compression utilities
+ii  htop                   3.3.0-4build1               amd64        interactive processes viewer
+ii  libc6                  2.39-0ubuntu8               amd64        GNU C Library: Shared libraries
+ii  libssl3t64             3.2.1-1ubuntu3              amd64        Secure Sockets Layer toolkit - shared libraries
+ii  linux-image-generic    6.8.0-45.45                 amd64        Linux kernel image
+ii  nano                   7.2-2build1                 amd64        small, friendly text editor
+ii  nginx                  1.24.0-2ubuntu7             amd64        high performance web server
+ii  openssh-server         1:9.6p1-3ubuntu13           amd64        secure shell (SSH) server
+ii  python3                3.12.3-0ubuntu2             amd64        interactive high-level object-oriented language
+ii  sudo                   1.9.15p5-3ubuntu5           amd64        Execute commands as another user
+ii  tmux                   3.4-2build1                 amd64        terminal multiplexer
+ii  ufw                    0.36.2-6                    all          program for managing a netfilter firewall
+ii  vim                    2:9.1.0016-1ubuntu7         amd64        Vi IMproved - enhanced vi editor
+ii  wget                   1.21.4-1ubuntu4             amd64        retrieves files from the web` }
+      }
+      return { output: `Usage: dpkg [options] command
+
+Commands:
+  -l, --list     List packages
+  -i, --install  Install package
+  -r, --remove   Remove package
+  -s, --status   Show package status` }
+    }
+
+    // ═══════════════════════════════
+    // CURL COMMAND
+    // ═══════════════════════════════
+
+    case 'curl': {
+      if (!args[0] && !args.find(a => a.startsWith('http'))) return { output: '\x1b[31mcurl: no URL specified\x1b[0m' }
+
+      const urlArg = args.find(a => a.startsWith('http')) || args[args.length - 1]
+      const headersOnly = args.includes('-I') || args.includes('--head')
+      const silent = args.includes('-s') || args.includes('--silent')
+
+      const domain = urlArg.replace(/^https?:\/\//, '').split('/')[0]
+      const site = simulatedWebsites[domain]
+
+      if (headersOnly) {
+        const hdrs = site ? site.headers : {
+          'Content-Type': 'text/html; charset=UTF-8',
+          'Server': 'nginx/1.24.0 (Ubuntu)',
+          'Content-Length': '4096',
+          'Date': new Date().toUTCString(),
+        }
+        return { output: `HTTP/1.1 200 OK\n${Object.entries(hdrs).map(([k, v]) => `${k}: ${v}`).join('\n')}` }
+      }
+
+      if (silent) {
+        return { output: site ? site.content : `<!DOCTYPE html>\n<html><head><title>${domain}</title></head>\n<body><h1>${domain}</h1><p>Generic response from ${domain}</p></body>\n</html>` }
+      }
+
+      const content = site ? site.content : `<!DOCTYPE html>\n<html><head><title>${domain}</title></head>\n<body><h1>${domain}</h1><p>Generic response from ${domain}</p></body>\n</html>`
+      const contentLength = Buffer.byteLength(content, 'utf8')
+
+      return { output: `  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  ${contentLength}  100  ${contentLength}    0     0  ${contentLength}      0  0:00:01  0:00:01 --:--:-- ${contentLength}
+
+${content}` }
+    }
+
+    // ═══════════════════════════════
+    // WGET COMMAND
+    // ═══════════════════════════════
+
+    case 'wget': {
+      if (!args[0]) return { output: '\x1b[31mwget: missing URL\x1b[0m' }
+      const urlArg = args.find(a => a.startsWith('http')) || args[args.length - 1]
+      const domain = urlArg.replace(/^https?:\/\//, '').split('/')[0]
+      const pathPart = urlArg.replace(/^https?:\/\//, '').split('/').slice(1).join('/')
+      const fileName = pathPart ? pathPart.split('/').pop()! : 'index.html'
+
+      const site = simulatedWebsites[domain]
+      const content = site ? site.content : `<!DOCTYPE html>\n<html><head><title>${domain}</title></head>\n<body><h1>${domain}</h1><p>Generic response</p></body>\n</html>`
+      const contentLength = Buffer.byteLength(content, 'utf8')
+
+      // Save file to filesystem
+      const filePath = resolvePath(fileName, session.cwd)
+      const { parent, name } = getParentAndName(filePath)
+      if (parent && parent.children) {
+        parent.children.set(name, createFile(name, '-rw-r--r--', session.username, session.username, content))
+      }
+
+      return { output: `--${new Date().toISOString()}--  ${urlArg}
+Resolving ${domain} (${domain})... 93.184.216.34
+Connecting to ${domain} (${domain})|93.184.216.34|:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: ${contentLength} [text/html]
+Saving to: '${fileName}'
+
+${fileName}          100%[===================>]  ${contentLength}  --.-KB/s    in 0s
+
+${new Date().toISOString()} - '${fileName}' saved [${contentLength}/${contentLength}]` }
+    }
+
+    // ═══════════════════════════════
+    // STARTX COMMAND
+    // ═══════════════════════════════
+
+    case 'startx': {
+      return { output: `\x1b[33mX.Org X Server 1.21.1.11
+X Protocol Version 11, Revision 0
+Current Operating System: Linux ubuntu-server 6.8.0-45-generic x86_64
+Kernel command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-45-generic root=/dev/sda1
+xorg-server 2:21.1.12-1ubuntu1\x1b[0m
+
+\x1b[32m(II) Module "glx" loaded\x1b[0m
+\x1b[32m(II) Module "fb" loaded\x1b[0m
+\x1b[32m(II) Setting vga mode\x1b[0m
+\x1b[32m(II) xfce4-session started\x1b[0m
+
+\x1b[1;36m╔══════════════════════════════════════════════════════════════════════════════════════════╗\x1b[0m
+\x1b[1;36m║\x1b[0m \x1b[1;37m Applications  ▾ │ Places ▾ │ System ▾ │                    │ 🔔 📶 🔋 12:34 \x1b[1;36m║\x1b[0m
+\x1b[1;36m╠══════════════════════════════════════════════════════════════════════════════════════════╣\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                                            \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[1;34m 📁 Documents\x1b[0m    \x1b[1;36m╔══════════════════════════════════════════════════╗\x1b[0m  \x1b[1;36m╔═══════════════╗\x1b[0m  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[1;34m 📁 Downloads\x1b[0m    \x1b[1;36m║\x1b[0m \x1b[1;32mubuntu@ubuntu-server: ~\x1b[0m                         \x1b[1;36m║\x1b[0m  \x1b[1;36m║\x1b[0m \x1b[1;33mSystem Monitor\x1b[0m \x1b[1;36m║\x1b[0m  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[1;32m 💻 Terminal\x1b[0m     \x1b[1;36m╠══════════════════════════════════════════════════╣\x1b[0m  \x1b[1;36m╠═══════════════╣\x1b[0m  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m  \x1b[36m 📂 File Manager\x1b[0m \x1b[1;36m║\x1b[0m $ ls -lah                                 \x1b[1;36m║\x1b[0m  \x1b[1;36m║\x1b[0m CPU: 12.3%     \x1b[1;36m║\x1b[0m  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                   \x1b[1;36m║\x1b[0m total 32K                                   \x1b[1;36m║\x1b[0m  \x1b[1;36m║\x1b[0m MEM: 51%       \x1b[1;36m║\x1b[0m  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                   \x1b[1;36m║\x1b[0m drwxr-xr-x  ubuntu ubuntu  .              \x1b[1;36m║\x1b[0m  \x1b[1;36m║\x1b[0m DISK: 14.2%    \x1b[1;36m║\x1b[0m  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                   \x1b[1;36m║\x1b[0m drwxr-xr-x  ubuntu ubuntu  ..             \x1b[1;36m║\x1b[0m  \x1b[1;36m║\x1b[0m NET: 1 Gbps    \x1b[1;36m║\x1b[0m  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                   \x1b[1;36m║\x1b[0m drwxr-xr-x  ubuntu ubuntu  documents/     \x1b[1;36m║\x1b[0m  \x1b[1;36m╚═══════════════╝\x1b[0m  \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                   \x1b[1;36m║\x1b[0m drwxr-xr-x  ubuntu ubuntu  projects/      \x1b[1;36m║\x1b[0m                           \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                   \x1b[1;36m║\x1b[0m drwxr-xr-x  ubuntu ubuntu  downloads/     \x1b[1;36m║\x1b[0m                           \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                   \x1b[1;36m║\x1b[0m $ _                                        \x1b[1;36m║\x1b[0m                           \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                   \x1b[1;36m╚══════════════════════════════════════════════════╝\x1b[0m                           \x1b[1;36m║\x1b[0m
+\x1b[1;36m║\x1b[0m                                                                                            \x1b[1;36m║\x1b[0m
+\x1b[1;36m╠══════════════════════════════════════════════════════════════════════════════════════════╣\x1b[0m
+\x1b[1;36m║\x1b[0m  🐧 Ubuntu 24.04 LTS │ bash │ 12:34 PM │ CPU: 12% │ MEM: 51% │ eth0: 10.0.0.1         \x1b[1;36m║\x1b[0m
+\x1b[1;36m╚══════════════════════════════════════════════════════════════════════════════════════════╝\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // STAT, FILE, DU, LN, DIFF
     // ═══════════════════════════════
 
     case 'stat': {
@@ -1504,10 +1473,7 @@ SEE ALSO
 Access: (${node.permissions})\tUid: (${node.owner})\tGid: (${node.group})
 Access: ${node.modified.toISOString()}
 Modify: ${node.modified.toISOString()}
-Change: ${node.modified.toISOString()}
-${node.encrypted ? '\x1b[33m  Encrypted: AES-256-GCM\x1b[0m' : ''}
-${node.compressed ? '\x1b[36m  Compressed: zstd\x1b[0m' : ''}
-${node.hash ? `  Hash: sha256:${node.hash}` : ''}` }
+Change: ${node.modified.toISOString()}` }
     }
 
     case 'file': {
@@ -1519,11 +1485,11 @@ ${node.hash ? `  Hash: sha256:${node.hash}` : ''}` }
       if (node.type === 'symlink') return { output: `${args[0]}: symbolic link to '${node.target}'` }
       if (node.type === 'device') return { output: `${args[0]}: device` }
       const content = node.content || ''
-      if (content.startsWith('#!/bin/')) return { output: `${args[0]}: script, ASCII text executable` }
+      if (content.startsWith('#!/bin/')) return { output: `${args[0]}: Bourne-Again shell script, ASCII text executable` }
       if (content.startsWith('<!DOCTYPE') || content.startsWith('<html')) return { output: `${args[0]}: HTML document, UTF-8 Unicode text` }
       if (content.startsWith('{') || content.startsWith('[')) return { output: `${args[0]}: JSON data, UTF-8 Unicode text` }
       if (content.includes('function') || content.includes('const ') || content.includes('import ')) return { output: `${args[0]}: source code, UTF-8 Unicode text` }
-      return { output: `${args[0]}: ASCII text${node.encrypted ? ' (encrypted)' : ''}` }
+      return { output: `${args[0]}: ASCII text` }
     }
 
     case 'du': {
@@ -1556,7 +1522,7 @@ ${node.hash ? `  Hash: sha256:${node.hash}` : ''}` }
         parent.children.set(name, createSymlink(name, srcArg, session.username))
         return { output: '' }
       }
-      return { output: `\x1b[33mZ-OS: Hard links are replaced by ZFS snapshots. Use 'zfs snapshot' instead.\x1b[0m` }
+      return { output: `\x1b[31mln: failed to create hard link '${dstArg}': Operation not permitted\x1b[0m` }
     }
 
     case 'diff': {
@@ -1613,7 +1579,6 @@ ${node.hash ? `  Hash: sha256:${node.hash}` : ''}` }
       const regex = new RegExp(pattern, flags)
       node.content = (node.content || '').replace(regex, replacement)
       node.modified = new Date()
-      node.hash = hashContent(node.content)
       return { output: '' }
     }
 
@@ -1624,7 +1589,7 @@ ${node.hash ? `  Hash: sha256:${node.hash}` : ''}` }
       const node = getNodeAtPath(filePath)
       if (!node || node.type === 'directory') return { output: `\x1b[31mawk: cannot open file\x1b[0m` }
       const printMatch = program.match(/\{print\s+\$(\d+)\}/)
-      if (!printMatch) return { output: '\x1b[33mZ-OS awk: simplified mode - supports {print $N}\x1b[0m' }
+      if (!printMatch) return { output: '\x1b[33mawk: simplified mode - supports {print $N}\x1b[0m' }
       const fieldIdx = parseInt(printMatch[1]) - 1
       const lines = (node.content || '').split('\n').filter(Boolean)
       const result = lines.map(line => {
@@ -1649,7 +1614,7 @@ ${node.hash ? `  Hash: sha256:${node.hash}` : ''}` }
       if (!node || node.type === 'directory') return { output: `\x1b[31m${cmd}: ${args[0]}: No such file\x1b[0m` }
       node.compressed = true
       node.size = Math.floor(node.size * 0.35)
-      return { output: `\x1b[32m${args[0]}: compressed with zstd (ratio: 65% reduction)\x1b[0m` }
+      return { output: `\x1b[32m${args[0]}: compressed (ratio: 65% reduction)\x1b[0m` }
     }
 
     case 'unxz': case 'gunzip': case 'decompress': {
@@ -1699,515 +1664,87 @@ ${node.hash ? `  Hash: sha256:${node.hash}` : ''}` }
       return { output: '' }
     }
 
-    // ═══════════════════════════════
-    // PHASE 2: Z-SCRIPT LANGUAGE
-    // ═══════════════════════════════
+    case 'tree': {
+      const targetPath = args[0] ? resolvePath(args[0], session.cwd) : session.cwd
+      const node = getNodeAtPath(targetPath)
+      if (!node || node.type !== 'directory') return { output: `\x1b[31mtree: ${targetPath}: Not a directory\x1b[0m` }
+      const lines: string[] = [targetPath]
+      function walk(nd: FileSystemNode, prefix: string) {
+        const entries = nd.children ? Array.from(nd.children.values()) : []
+        entries.forEach((e, i) => {
+          const isLast = i === entries.length - 1
+          const connector = isLast ? '└── ' : '├── '
+          const color = e.type === 'directory' ? '\x1b[1;34m' : e.type === 'symlink' ? '\x1b[1;36m' : ''
+          lines.push(`${prefix}${connector}${color}${e.name}${e.type === 'directory' ? '/' : ''}\x1b[0m`)
+          if (e.type === 'directory') walk(e, prefix + (isLast ? '    ' : '│   '))
+        })
+      }
+      walk(node, '')
+      return { output: lines.join('\n') }
+    }
 
-    case 'zrun': {
-      if (!args[0]) return { output: '\x1b[31mzrun: missing script file\x1b[0m' }
+    case 'head': {
+      if (!args[0]) return { output: '\x1b[31mhead: missing operand\x1b[0m' }
+      const n = args.includes('-n') ? parseInt(args[args.indexOf('-n') + 1]) || 10 : 10
+      const file = args.find(a => !a.startsWith('-') && !a.match(/^\d+$/)) || args[args.length - 1]
+      const filePath = resolvePath(file, session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node || node.type === 'directory') return { output: `\x1b[31mhead: ${file}: No such file\x1b[0m` }
+      return { output: (node.content || '').split('\n').slice(0, n).join('\n') }
+    }
+
+    case 'tail': {
+      if (!args[0]) return { output: '\x1b[31mtail: missing operand\x1b[0m' }
+      const n = args.includes('-n') ? parseInt(args[args.indexOf('-n') + 1]) || 10 : 10
+      const file = args.find(a => !a.startsWith('-') && !a.match(/^\d+$/)) || args[args.length - 1]
+      const filePath = resolvePath(file, session.cwd)
+      const node = getNodeAtPath(filePath)
+      if (!node || node.type === 'directory') return { output: `\x1b[31mtail: ${file}: No such file\x1b[0m` }
+      return { output: (node.content || '').split('\n').slice(-n).join('\n') }
+    }
+
+    case 'wc': {
+      if (!args[0]) return { output: '\x1b[31mwc: missing operand\x1b[0m' }
       const filePath = resolvePath(args[0], session.cwd)
       const node = getNodeAtPath(filePath)
-      if (!node || node.type === 'directory') return { output: `\x1b[31mzrun: ${args[0]}: No such file\x1b[0m` }
+      if (!node || node.type === 'directory') return { output: `\x1b[31mwc: ${args[0]}: No such file\x1b[0m` }
       const content = node.content || ''
-      const scriptLines = content.split('\n').filter(l => l.trim() && !l.trim().startsWith('#'))
-      const output: string[] = []
-      for (const line of scriptLines) {
-        const trimmed = line.trim()
-        if (trimmed.startsWith('echo ')) {
-          output.push(trimmed.slice(5).replace(/^["']|["']$/g, ''))
-        } else if (trimmed.startsWith('let ')) {
-          const expr = trimmed.slice(4)
-          try { output.push(String(eval(expr))) } catch { output.push('\x1b[31mError in expression\x1b[0m') }
-        } else if (trimmed.startsWith('var ')) {
-          const [varName, ...rest] = trimmed.slice(4).split('=')
-          session.variables[varName.trim()] = rest.join('=').trim().replace(/^["']|["']$/g, '')
-        } else if (trimmed.startsWith('if ')) {
-          output.push('\x1b[33m[Conditional: evaluated]\x1b[0m')
-        } else if (trimmed.startsWith('for ')) {
-          output.push('\x1b[33m[Loop: executed]\x1b[0m')
-        } else if (trimmed.startsWith('func ')) {
-          output.push('\x1b[33m[Function defined]\x1b[0m')
-        } else if (trimmed === 'ls' || trimmed.startsWith('ls ')) {
-          const result = executeSingleCommand('ls', trimmed.split(/\s+/).slice(1), session, '')
-          output.push(result.output)
-        } else if (trimmed === 'pwd') {
-          output.push(session.cwd)
-        } else if (trimmed === 'date') {
-          output.push(new Date().toString())
-        } else if (trimmed.startsWith('zsysinfo') || trimmed.startsWith('zsec') || trimmed.startsWith('znet') || trimmed.startsWith('zpkg')) {
-          const parts = trimmed.split(/\s+/)
-          const result = executeSingleCommand(parts[0], parts.slice(1), session, '')
-          output.push(result.output)
-        }
-      }
-      return { output: output.join('\n') || '\x1b[33mScript completed with no output\x1b[0m' }
+      return { output: `  ${content.split('\n').length}  ${content.split(/\s+/).filter(Boolean).length}  ${content.length} ${args[0]}` }
     }
 
-    case 'zcompile': {
-      if (!args[0]) return { output: '\x1b[31mzcompile: missing script file\x1b[0m' }
-      const filePath = resolvePath(args[0], session.cwd)
-      const node = getNodeAtPath(filePath)
-      if (!node) return { output: `\x1b[31mzcompile: ${args[0]}: No such file\x1b[0m` }
-      const content = node.content || ''
-      const lines = content.split('\n').filter(l => l.trim() && !l.trim().startsWith('#'))
-      const bytecode: string[] = [
-        '\x1b[1;36mZ-Bytecode v3.0\x1b[0m',
-        '\x1b[33m─── Compiled Output ───\x1b[0m',
-        '',
-        `; Source: ${args[0]}`,
-        `; Instructions: ${lines.length}`,
-        `; Timestamp: ${new Date().toISOString()}`,
-        '',
-      ]
-      lines.forEach((line, i) => {
-        const op = line.trim().split(' ')[0]
-        const operands = line.trim().slice(op.length).trim()
-        const opMap: Record<string, string> = {
-          'echo': 'OUT', 'let': 'CALC', 'var': 'STORE', 'if': 'BRANCH',
-          'for': 'LOOP', 'func': 'DEF', 'return': 'RET', 'while': 'WHILE',
-          'ls': 'SYSCALL_LS', 'pwd': 'SYSCALL_PWD', 'cat': 'SYSCALL_CAT',
-          'cd': 'SYSCALL_CD', 'mkdir': 'SYSCALL_MKDIR',
-        }
-        const opcode = opMap[op] || 'EXEC'
-        bytecode.push(`  ${String(i).padStart(4)}  ${opcode.padEnd(14)} ${operands}`)
-      })
-      bytecode.push('', `\x1b[32mCompilation successful. ${lines.length} instructions.\x1b[0m`)
-      return { output: bytecode.join('\n') }
-    }
+    case 'ping': {
+      const host = args[0] || 'ubuntu.com'
+      return { output: `PING ${host} (93.184.216.34) 56(84) bytes of data.
+64 bytes from ${host}: icmp_seq=1 ttl=56 time=3.2 ms
+64 bytes from ${host}: icmp_seq=2 ttl=56 time=2.8 ms
+64 bytes from ${host}: icmp_seq=3 ttl=56 time=3.1 ms
 
-    case 'zdebug': {
-      if (!args[0]) return { output: '\x1b[31mzdebug: missing script file\x1b[0m' }
-      const filePath = resolvePath(args[0], session.cwd)
-      const node = getNodeAtPath(filePath)
-      if (!node) return { output: `\x1b[31mzdebug: ${args[0]}: No such file\x1b[0m` }
-      const content = node.content || ''
-      const lines = content.split('\n')
-      const debug: string[] = [
-        '\x1b[1;36mZ-Debugger v3.0\x1b[0m',
-        '\x1b[33m─── Step-by-Step Trace ───\x1b[0m',
-        '',
-      ]
-      lines.forEach((line, i) => {
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('#')) {
-          debug.push(`  \x1b[90m${String(i + 1).padStart(4)}│ ${trimmed || '[empty]'}\x1b[0m  SKIP`)
-        } else {
-          debug.push(`  \x1b[32m${String(i + 1).padStart(4)}│ ${trimmed}\x1b[0m  → EXECUTE`)
-        }
-      })
-      debug.push('', '\x1b[32mDebug complete. No errors found.\x1b[0m')
-      return { output: debug.join('\n') }
+--- ${host} ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2003ms
+rtt min/avg/max/mdev = 2.800/3.033/3.200/0.171 ms` }
     }
 
     // ═══════════════════════════════
-    // PHASE 3: DATABASE TOOLS
+    // NETWORK TOOLS
     // ═══════════════════════════════
-
-    case 'zdb': {
-      if (args[0] === 'create' && args[1]) {
-        const dbPath = resolvePath(args[1] + '.zdb', session.cwd)
-        const { parent, name } = getParentAndName(dbPath)
-        if (!parent || !parent.children) return { output: `\x1b[31mzdb: cannot create database\x1b[0m` }
-        parent.children.set(name, createFile(name, '-rw-------', session.username, session.username,
-          `# Z-OS Database: ${args[1]}\n# Created: ${new Date().toISOString()}\n# Type: key-value store\n{}`))
-        return { output: `\x1b[32mDatabase '${args[1]}.zdb' created.\x1b[0m` }
-      }
-      if (args[0] === 'tables' || args[0] === 'list') {
-        const dbFiles: string[] = []
-        function findDbs(node: FileSystemNode, currentPath: string) {
-          if (node.name.endsWith('.zdb')) dbFiles.push(currentPath)
-          if (node.children) for (const [n, c] of node.children) findDbs(c, currentPath + '/' + n)
-        }
-        findDbs(rootFS, '/')
-        return { output: dbFiles.length > 0 ? `\x1b[1;36mZ-DB Databases:\x1b[0m\n${dbFiles.map(f => `  \x1b[32m✓\x1b[0m ${f}`).join('\n')}` : '\x1b[33mNo databases found. Use zdb create <name>\x1b[0m' }
-      }
-      if (args[0] === 'query' && args[1]) {
-        return { output: `\x1b[1;36mZ-DB Query Result:\x1b[0m\n  Query: ${args.slice(1).join(' ')}\n  Rows affected: ${Math.floor(Math.random() * 100)}\n  Time: ${(Math.random() * 10).toFixed(2)}ms` }
-      }
-      return { output: `\x1b[33mUsage: zdb [create|tables|query] [args]\x1b[0m
-  zdb create <name>     Create new database
-  zdb tables            List all databases
-  zdb query <sql>       Execute SQL-like query` }
-    }
-
-    // ═══════════════════════════════
-    // PHASE 4: DOCKER/CONTAINER TOOLS
-    // ═══════════════════════════════
-
-    case 'zdocker': case 'docker': {
-      if (args[0] === 'ps' || args.length === 0) {
-        return { output: `\x1b[1;36mZ-Container Runtime\x1b[0m
-CONTAINER ID   IMAGE               STATUS      PORTS                  NAMES
-a1b2c3d4e5f6   z-os/nginx:latest   Up 2h       0.0.0.0:80->80/tcp     web-server
-f6e5d4c3b2a1   z-os/redis:latest   Up 2h       0.0.0.0:6379->6379     cache
-1a2b3c4d5e6f   z-os/node:22        Up 45m      0.0.0.0:3000->3000     app-server` }
-      }
-      if (args[0] === 'images') {
-        return { output: `\x1b[1;36mZ-Container Images\x1b[0m
-REPOSITORY       TAG       SIZE
-z-os/nginx       latest    24MB
-z-os/redis       latest    12MB
-z-os/node        22        128MB
-z-os/python      3.13      64MB
-z-os/postgres    17        96MB` }
-      }
-      if (args[0] === 'run' && args[1]) {
-        return { output: `\x1b[32mContainer '${args[1]}' starting...\x1b[0m
-Pulling image... done
-Creating container... done
-Starting process... done
-\x1b[32mContainer running on port ${8000 + Math.floor(Math.random() * 1000)}\x1b[0m` }
-      }
-      if (args[0] === 'build' && args[1]) {
-        return { output: `\x1b[32mBuilding image '${args[1]}'...\x1b[0m
-Step 1/5 : FROM z-os/base:latest
-Step 2/5 : COPY . /app
-Step 3/5 : RUN zpkg install deps
-Step 4/5 : EXPOSE 8080
-Step 5/5 : CMD ["./start"]
-\x1b[32mSuccessfully built image '${args[1]}'\x1b[0m` }
-      }
-      if (args[0] === 'compose') {
-        return { output: `\x1b[1;36mZ-Docker Compose\x1b[0m
-Services:
-  web:     z-os/nginx:latest    (running, port 80)
-  api:     z-os/node:22         (running, port 3000)
-  db:      z-os/postgres:17     (running, port 5432)
-  cache:   z-os/redis:latest    (running, port 6379)` }
-      }
-      return { output: `\x1b[33mUsage: zdocker [ps|images|run|build|compose] [args]\x1b[0m` }
-    }
-
-    // ═══════════════════════════════
-    // PHASE 5: GIT TOOLS
-    // ═══════════════════════════════
-
-    case 'zgit': case 'git': {
-      if (args[0] === 'status' || args.length === 0) {
-        return { output: `\x1b[1;36mZ-Git Status\x1b[0m
-On branch main
-Your branch is up to date with 'origin/main'.
-
-Changes not staged for commit:
-  \x1b[31mmodified:   src/app.ts\x1b[0m
-  \x1b[31mmodified:   config/z-security.conf\x1b[0m
-
-Untracked files:
-  \x1b[31mnew-file:  src/z-ai-module.ts\x1b[0m
-  \x1b[31mnew-file:  src/z-quantum-lib.ts\x1b[0m` }
-      }
-      if (args[0] === 'log') {
-        const commits = [
-          { hash: 'a1b2c3d', msg: 'feat: add quantum crypto module', time: '2 hours ago' },
-          { hash: 'e4f5g6h', msg: 'fix: firewall rule bypass patch', time: '5 hours ago' },
-          { hash: 'i7j8k9l', msg: 'feat: Z-Script compiler v2', time: '1 day ago' },
-          { hash: 'm0n1o2p', msg: 'security: harden kernel syscalls', time: '2 days ago' },
-          { hash: 'q3r4s5t', msg: 'feat: AI threat detection v3', time: '3 days ago' },
-        ]
-        return { output: `\x1b[1;36mZ-Git Log\x1b[0m\n${commits.map(c => `\x1b[33m${c.hash}\x1b[0m ${c.msg} \x1b[90m(${c.time})\x1b[0m`).join('\n')}` }
-      }
-      if (args[0] === 'branch') {
-        return { output: `\x1b[1;36mZ-Git Branches\x1b[0m\n* \x1b[32mmain\x1b[0m\n  develop\n  feature/quantum-crypto\n  feature/ai-firewall\n  hotfix/zve-2026-007` }
-      }
-      if (args[0] === 'diff') {
-        return { output: `\x1b[1;36mZ-Git Diff\x1b[0m
-\x1b[33mdiff --git a/src/app.ts b/src/app.ts\x1b[0m
-index a1b2c3d..e4f5g6h 100644
---- a/src/app.ts
-+++ b/src/app.ts
-@@ -42,6 +42,8 @@
-   const crypto = new QuantumCrypto();
-+  crypto.enableKyber1024();
-+  crypto.setRotationPeriod('24h');` }
-      }
-      return { output: `\x1b[33mUsage: zgit [status|log|branch|diff] [args]\x1b[0m` }
-    }
-
-    // ═══════════════════════════════
-    // PHASE 6: CRON & TASK SCHEDULER
-    // ═══════════════════════════════
-
-    case 'zcron': {
-      if (args[0] === 'list' || args.length === 0) {
-        return { output: `\x1b[1;36mZ-Cron - Scheduled Tasks\x1b[0m
-────────────────────────────────────────────────────────
-ID      Schedule          Command                     Last Run
-001     */5 * * * *       zsec scan --quick           3 min ago
-002     0 * * * *         zpkg update --check          42 min ago
-003     0 0 * * *         zfs scrub zroot              12h ago
-004     0 0 * * 0         zsec harden --auto           5 days ago
-005     @reboot           z-firewall --reload          On boot` }
-      }
-      if (args[0] === 'add' && args.length >= 3) {
-        return { output: `\x1b[32mCron job added: ${args[1]} ${args.slice(2).join(' ')}\x1b[0m` }
-      }
-      if (args[0] === 'remove' && args[1]) {
-        return { output: `\x1b[32mCron job ${args[1]} removed.\x1b[0m` }
-      }
-      return { output: `\x1b[33mUsage: zcron [list|add|remove] [schedule] [command]\x1b[0m` }
-    }
-
-    // ═══════════════════════════════
-    // PHASE 7: LOG VIEWER
-    // ═══════════════════════════════
-
-    case 'zlog': {
-      if (args[0] === 'system' || args.length === 0) {
-        return { output: `\x1b[1;36mZ-OS System Log\x1b[0m
-────────────────────────────────────────────────────────
-\x1b[32m[2026-06-22 10:00:01]\x1b[0m [INFO] Z-OS kernel booted successfully
-\x1b[32m[2026-06-22 10:00:02]\x1b[0m [INFO] All 15 system services started
-\x1b[32m[2026-06-22 10:00:03]\x1b[0m [INFO] ZFS filesystem mounted
-\x1b[33m[2026-06-22 10:15:22]\x1b[0m [WARN] Anomalous connection from 185.220.101.42
-\x1b[31m[2026-06-22 10:15:23]\x1b[0m [BLOCK] Firewall blocked 185.220.101.42 (Tor exit)
-\x1b[32m[2026-06-22 11:00:00]\x1b[0m [INFO] Scheduled security scan completed
-\x1b[33m[2026-06-22 11:30:45]\x1b[0m [WARN] Privileged operation: root apt update
-\x1b[31m[2026-06-22 12:02:11]\x1b[0m [BLOCK] Port scan from 45.33.32.156 blocked
-\x1b[32m[2026-06-22 12:30:00]\x1b[0m [INFO] ZFS scrub: 0 errors found
-\x1b[32m[2026-06-22 13:00:00]\x1b[0m [INFO] Key rotation completed (AES-256-GCM)` }
-      }
-      if (args[0] === 'auth') {
-        return { output: `\x1b[1;36mZ-OS Auth Log\x1b[0m
-────────────────────────────────────────────────────────
-\x1b[32m[10:00:05]\x1b[0m Session opened for user z-user
-\x1b[33m[10:15:22]\x1b[0m Failed password for root from 185.220.101.42
-\x1b[31m[10:15:23]\x1b[0m BLOCKED: brute force attempt from 185.220.101.42
-\x1b[33m[11:02:11]\x1b[0m Invalid user admin from 45.33.32.156
-\x1b[31m[11:02:12]\x1b[0m BLOCKED: port scanner 45.33.32.156
-\x1b[32m[13:00:00]\x1b[0m z-user authenticated via Ed25519 key` }
-      }
-      if (args[0] === 'firewall') {
-        return { output: `\x1b[1;36mZ-Firewall Log\x1b[0m
-────────────────────────────────────────────────────────
-\x1b[31m[BLOCK]\x1b[0m 185.220.101.42 -> :22 (Tor exit node) [Rule: fw005]
-\x1b[31m[BLOCK]\x1b[0m 45.33.32.156 -> :* (port scanner) [Rule: fw006]
-\x1b[31m[BLOCK]\x1b[0m 103.21.244.0/24 -> :22 (brute force) [AI-detect]
-\x1b[32m[ALLOW]\x1b[0m 10.0.0.50 -> :443 (legitimate) [Rule: fw003]
-\x1b[32m[ALLOW]\x1b[0m 192.168.1.10 -> :80 (legitimate) [Rule: fw002]` }
-      }
-      return { output: `\x1b[33mUsage: zlog [system|auth|firewall]\x1b[0m` }
-    }
-
-    // ═══════════════════════════════
-    // PHASE 8: USER MANAGEMENT
-    // ═══════════════════════════════
-
-    case 'zuser': case 'useradd': case 'usermod': {
-      if (args[0] === 'list' || (cmd === 'zuser' && args.length === 0)) {
-        return { output: `\x1b[1;36mZ-OS User Management\x1b[0m
-────────────────────────────────────────────────────────
-Username     UID   GID   Home              Shell           Status
-root         0     0     /root             /bin/zsh        \x1b[32mactive\x1b[0m
-z-user       1000  1000  /home/z-user      /bin/zsh        \x1b[32mactive\x1b[0m
-www          33    33    /var/www          /bin/nologin    \x1b[33mservice\x1b[0m
-docker       998   998   /var/lib/docker   /bin/nologin    \x1b[33mservice\x1b[0m
-postgres     997   997   /var/lib/postgres /bin/nologin    \x1b[90mdisabled\x1b[0m` }
-      }
-      if (args[0] === 'add' && args[1]) {
-        return { output: `\x1b[32mUser '${args[1]}' created (UID: ${1001 + Math.floor(Math.random() * 100)})\x1b[0m` }
-      }
-      if (args[0] === 'passwd' && args[1]) {
-        return { output: `\x1b[32mPassword for '${args[1]}' updated.\x1b[0m` }
-      }
-      return { output: `\x1b[33mUsage: zuser [list|add|passwd] [username]\x1b[0m` }
-    }
-
-    // ═══════════════════════════════
-    // PHASE 9: SYSTEM BACKUP
-    // ═══════════════════════════════
-
-    case 'zbackup': {
-      if (args[0] === 'create') {
-        return { output: `\x1b[1;36mZ-Backup System\x1b[0m
-────────────────────────────────────────────────────────
-\x1b[32mCreating backup...\x1b[0m
-  Snapshot: zroot@backup-${new Date().toISOString().split('T')[0]}
-  Compressed: zstd level 19
-  Encrypted: AES-256-GCM
-  Size: 2.4 GB (compressed from 8.1 GB)
-  \x1b[32mBackup created successfully.\x1b[0m` }
-      }
-      if (args[0] === 'list') {
-        return { output: `\x1b[1;36mZ-Backup Snapshots\x1b[0m
-────────────────────────────────────────────────────────
-NAME                              SIZE     DATE
-zroot@backup-2026-06-22           2.4G     Today
-zroot@backup-2026-06-21           2.3G     Yesterday
-zroot@backup-2026-06-20           2.2G     2 days ago
-zroot@backup-2026-06-15           2.1G     1 week ago` }
-      }
-      if (args[0] === 'restore' && args[1]) {
-        return { output: `\x1b[33mRestoring from ${args[1]}...\x1b[0m
-  Decrypting... done
-  Decompressing... done
-  Verifying checksums... done
-  \x1b[32mRestore completed successfully.\x1b[0m` }
-      }
-      return { output: `\x1b[33mUsage: zbackup [create|list|restore] [snapshot]\x1b[0m` }
-    }
-
-    // ═══════════════════════════════
-    // PHASE 10: PERFORMANCE MONITOR
-    // ═══════════════════════════════
-
-    case 'zperf': {
-      const m = getSystemMetrics()
-      return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║              \x1b[1;33mZ-OS Performance Monitor\x1b[1;36m                                  ║\x1b[0m
-\x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;33mCPU Performance\x1b[0m                                               \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Usage:    ${m.cpuUsage.toFixed(1)}% ${'█'.repeat(Math.floor(m.cpuUsage/5))}${'░'.repeat(20-Math.floor(m.cpuUsage/5))}  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Cores:    4 physical / 4 logical                        \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Freq:     4.2 GHz (turbo: 4.8 GHz)                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Load:     ${m.loadAvg.join(', ')}                                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;33mMemory Performance\x1b[0m                                            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Used:     ${Math.floor(m.memUsed/1024*4)}MB / 16384MB ${(m.memUsed/m.memTotal*100).toFixed(1)}%                    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Cache:    2048 MB (smart allocation)                    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Swap:     0 MB / 8192 MB (0% used)                     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Dedup:    Saving 1.2 GB (30% reduction)                 \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;33mI/O Performance\x1b[0m                                               \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Disk:     Seq Read 3.2 GB/s | Write 2.8 GB/s            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  IOPS:     120K read | 95K write                         \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Network:  RX ${(m.netRx/1024/1024).toFixed(1)} MB | TX ${(m.netTx/1024/1024).toFixed(1)} MB                   \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;33mScheduler Stats\x1b[0m                                              \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Context switches: 12,450/s (AI optimized)               \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Avg latency: 0.8μs (Linux avg: 1.3μs)                  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  Processes: ${m.processes} | Threads: ${m.threads}                             \x1b[1;36m║\x1b[0m
-\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
-    }
-
-    // ═══════════════════════════════
-    // PHASE 11: ZFS MANAGEMENT
-    // ═══════════════════════════════
-
-    case 'zfs': {
-      if (args[0] === 'list' || args.length === 0) {
-        return { output: `\x1b[1;36mZFS Pool Status\x1b[0m
-────────────────────────────────────────────────────────
-NAME       SIZE    ALLOC   FREE   DEDUP  COMPRESS  HEALTH
-zroot      64G     8.2G    55.8G  1.30x  zstd-19   \x1b[32mONLINE\x1b[0m
-zroot/home 32G    2.1G    29.9G  1.25x  zstd-19   \x1b[32mONLINE\x1b[0m
-zroot/var  16G     980M   15.0G  1.10x  zstd-19   \x1b[32mONLINE\x1b[0m
-
-Pool: zroot
-  State: \x1b[32mONLINE\x1b[0m
-  Scrub: completed 0 errors
-  Errors: No known data errors` }
-      }
-      if (args[0] === 'snapshot' && args[1]) {
-        return { output: `\x1b[32mSnapshot created: zroot@${args[1]}\x1b[0m
-  Size: 245 MB (incremental)
-  Encrypted: AES-256-GCM` }
-      }
-      if (args[0] === 'scrub') {
-        return { output: `\x1b[33mScrubbing pool zroot...\x1b[0m
-  Progress: 0% (estimated 12 min)
-  Scanned: 0 / 8.2G
-  Errors: 0` }
-      }
-      if (args[0] === 'dedup') {
-        return { output: `\x1b[1;36mZFS Deduplication Stats\x1b[0m
-────────────────────────────────────────────────────────
-  Dedup Ratio: 1.30x
-  Space Saved: 2.4 GB
-  Entries: 142,560
-  Memory Used: 128 MB` }
-      }
-      return { output: `\x1b[33mUsage: zfs [list|snapshot|scrub|dedup] [args]\x1b[0m` }
-    }
-
-    // ═══════════════════════════════
-    // PHASE 12: SYSTEM UPDATE
-    // ═══════════════════════════════
-
-    case 'zupdate': {
-      return { output: `\x1b[1;36mZ-OS System Update\x1b[0m
-────────────────────────────────────────────────────────
-\x1b[33mChecking for updates...\x1b[0m
-  Repository: z-os-quantum
-  Last updated: 2 hours ago
-
-\x1b[32mAvailable updates:\x1b[0m
-  z-kernel         6.2.0-2 -> 6.2.0-3  (security fix: ZVE-2026-001)
-  z-firewall       3.1.1  -> 3.1.2   (security fix: ZVE-2026-004)
-  z-ai-detect      3.0.0  -> 3.0.1   (improved detection model)
-  nginx            1.26.0 -> 1.27.0   (performance improvement)
-
-\x1b[33mApplying updates (live patching, no reboot needed)...\x1b[0m
-  [1/4] z-kernel......... \x1b[32mDONE\x1b[0m
-  [2/4] z-firewall........ \x1b[32mDONE\x1b[0m
-  [3/4] z-ai-detect....... \x1b[32mDONE\x1b[0m
-  [4/4] nginx.............. \x1b[32mDONE\x1b[0m
-
-\x1b[32mSystem updated successfully. 0 vulnerabilities remaining.\x1b[0m` }
-    }
-
-    // ═══════════════════════════════
-    // PHASE 13: MISC POWER TOOLS
-    // ═══════════════════════════════
-
-    case 'watch': {
-      if (!args[0]) return { output: '\x1b[31mwatch: missing command\x1b[0m' }
-      const result = executeSingleCommand(args[0], args.slice(1), session, '')
-      return { output: `Every 2.0s: ${args.join(' ')}\n${new Date().toLocaleString()}\n\n${result.output}` }
-    }
-
-    case 'sleep': {
-      return { output: `\x1b[33mZ-OS: Sleep bypassed (non-blocking terminal)\x1b[0m` }
-    }
-
-    case 'wget': {
-      if (!args[0]) return { output: '\x1b[31mwget: missing URL\x1b[0m' }
-      const fileName = args[0].split('/').pop() || 'index.html'
-      const filePath = resolvePath(fileName, session.cwd)
-      const { parent, name } = getParentAndName(filePath)
-      if (parent && parent.children) {
-        parent.children.set(name, createFile(name, '-rw-r--r--', session.username, session.username, `[Downloaded from ${args[0]}]`))
-      }
-      return { output: `\x1b[33m--${new Date().toISOString()}--  ${args[0]}\x1b[0m
-Resolving... connected.
-HTTP request sent, awaiting response... 200 OK
-Length: 256 [text/html]
-Saving to: '${fileName}'
-\x1b[32m'${fileName}' saved [256/256]\x1b[0m` }
-    }
-
-    case 'curl': {
-      if (!args[0]) return { output: '\x1b[31mcurl: missing URL\x1b[0m' }
-      return { output: `\x1b[33m  % Total    % Received % Xferd  Speed   Time\x1b[0m
-100   256  100   256  0     0   1024      0 --:--:-- --:--:--  1024
-HTTP/1.1 200 OK
-Content-Type: text/html
-Server: nginx/1.27.0 (Z-OS)
-Strict-Transport-Security: max-age=31536000
-X-Powered-By: Z-OS/3.0
-
-<!DOCTYPE html><html><body><h1>Hello from Z-OS</h1></body></html>` }
-    }
 
     case 'ssh': {
       if (!args[0]) return { output: '\x1b[31mssh: missing destination\x1b[0m' }
-      return { output: `\x1b[33mConnecting to ${args[0]}...\x1b[0m
-The authenticity of host can't be established.
-Ed25519 key fingerprint is SHA256:z8Kq2mN4pR7sT9vW1xY3zA5bC7dE9fG0hI2jK4lM6n
-\x1b[32mConnected securely via quantum-resistant key exchange.\x1b[0m` }
+      return { output: `The authenticity of host '${args[0]}' can't be established.
+ED25519 key fingerprint is SHA256:a4Bc6DeF8gHi0JkL2mNo4PqRsTuVwXy6zA8bCdEfGh
+Are you sure you want to continue connecting (yes/no/[fingerprint])? ` }
     }
 
     case 'scp': {
       if (args.length < 2) return { output: '\x1b[31mscp: missing arguments\x1b[0m' }
       return { output: `\x1b[32mSecure copy initiated...\x1b[0m
-Transfer: AES-256-GCM encrypted
 Progress: ████████████████████ 100%
 \x1b[32mTransfer complete.\x1b[0m` }
     }
 
     case 'kill': {
       if (!args[0]) return { output: '\x1b[31mkill: missing PID\x1b[0m' }
-      return { output: `\x1b[32mProcess ${args[0]} terminated with AI-optimized signal delivery.\x1b[0m` }
+      return { output: `\x1b[32mProcess ${args[0]} terminated.\x1b[0m` }
     }
 
     case 'killall': {
@@ -2216,314 +1753,225 @@ Progress: ████████████████████ 100%
     }
 
     case 'reboot': {
-      return { output: `\x1b[33mZ-OS: Live kernel patching eliminates the need for reboot.\x1b[0m
-\x1b[32mAll updates applied in real-time. System uptime preserved.\x1b[0m` }
+      return { output: `\x1b[33mSystem is going down for reboot NOW!\x1b[0m` }
     }
 
     case 'shutdown': {
-      return { output: `\x1b[33mZ-OS does not support shutdown in cloud mode.\x1b[0m
-Use 'exit' to disconnect your session.` }
+      return { output: `\x1b[33mSystem is going down for power-off NOW!\x1b[0m` }
     }
 
     case 'dmesg': {
-      return { output: `\x1b[1;36mZ-OS Kernel Messages\x1b[0m
-[    0.000000] Z-OS Quantum Kernel 6.2.0-z-quantum
-[    0.000001] Command line: BOOT_IMAGE=/boot/vmlinuz-6.2.0-z-quantum root=/dev/zroot
-[    0.001234] Z-Quantum CPU initialized (4 cores @ 4.2GHz)
-[    0.002456] ZFS: zroot pool mounted with zstd-19 compression
-[    0.003789] z-quantum-crypto: AES-256-GCM + Kyber-1024 loaded
-[    0.004012] z-kernel-guard: Monitoring 342 syscalls
-[    0.005234] z-firewall: 247 rules loaded (AI model: z-threat-v3)
-[    0.006456] z-ai-detect: Starting threat detection engine
-[    0.007890] z-netmanager: Interface z0 up (10 Gbps)
-[    0.009012] All system services operational` }
-    }
-
-    case 'strace': case 'ztrace': {
-      if (!args[0]) return { output: `\x1b[31m${cmd}: missing command\x1b[0m` }
-      return { output: `\x1b[1;36mZ-Trace: ${args.join(' ')}\x1b[0m
-z_syscall(open, "/etc/z-os-release", O_RDONLY) = 3
-z_syscall(read, 3, ...)              = 256 bytes
-z_syscall(close, 3)                  = 0
-z_syscall(write, 1, ...)             = 128 bytes
-z_syscall(exit_group, 0)             = ?
-Total syscalls: 4, Total time: 0.3ms` }
+      return { output: `[    0.000000] Linux version 6.8.0-45-generic (buildd@lcy02-amd64-051) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.2.0-23ubuntu4) 13.2.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #45-Ubuntu SMP x86_64
+[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-45-generic root=/dev/sda1
+[    0.000001] BIOS-provided physical RAM map:
+[    0.000002] BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+[    0.001234] x86/fpu: x87 FPU on chip
+[    0.002456] ACPI: RSDP 0x00000000000F5A00 000024 (v02 BOCHS )
+[    0.003789] Memory: 16384MB available
+[    0.004012] CPU: Intel(R) Xeon(R) CPU @ 2.80GHz (4 cores)
+[    0.005234] NET: Registered PF_INET6 protocol family
+[    0.006456] EXT4-fs (sda1): mounted filesystem
+[    0.007890] systemd[1]: systemd 255.4-1ubuntu8 running in system mode
+[    0.009012] systemd[1]: Detected architecture x86-64` }
     }
 
     case 'lsof': {
-      if (!args[0]) return { output: `\x1b[1;36mZ-OS Open Files\x1b[0m
-COMMAND    PID   USER   FD   TYPE   DEVICE   SIZE/OFF   NAME
-zsh       142   z-user  0r   CHR    0,6      0t0        /dev/tty0
-zsh       142   z-user  1w   CHR    0,6      0t0        /dev/tty0
-zsh       142   z-user  2w   CHR    0,6      0t0        /dev/tty0
-nginx      10   www    4u   IPv4   12643    0t0        TCP *:80
-sshd       11   root   3u   IPv4   12892    0t0        TCP *:22` }
-      return { output: `\x1b[31mlsof: ${args[0]} (simplified mode - use ztrace for detailed tracing)\x1b[0m` }
-    }
-
-    // ═══════════════════════════════
-    // AI ASSISTANT
-    // ═══════════════════════════════
-
-    case 'zai': {
-      if (args.length === 0 || args[0] === 'help') {
-        return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║              \x1b[1;33mZ-AI Assistant - Intelligent System Helper\x1b[1;36m                ║\x1b[0m
-\x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33mzai ask <question>\x1b[0m    Ask AI about system tasks          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33mzai fix <issue>\x1b[0m      Get AI-powered fix suggestions     \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33mzai optimize\x1b[0m         Get performance optimization tips  \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33mzai security\x1b[0m        Get security recommendations       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33mzai diagnose\x1b[0m        Run AI system diagnostics          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[33mzai learn\x1b[0m           Show AI learning capabilities       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
-      }
-      if (args[0] === 'ask' && args.length > 1) {
-        const question = args.slice(1).join(' ')
-        return { output: `\x1b[1;36m[Z-AI] Analyzing your question...\x1b[0m
-
-Question: "${question}"
-
-\x1b[1;33mAI Analysis:\x1b[0m
-Based on the current system state, I recommend checking the following:
-1. Run \x1b[36mzsysinfo\x1b[0m to get full system overview
-2. Run \x1b[36mzsec scan\x1b[0m to check for security issues
-3. Run \x1b[36mzperf\x1b[0m to monitor performance metrics
-
-The Z-AI engine continuously learns from your system behavior
-and can provide personalized recommendations.
-
-\x1b[32mConfidence: 94.7% | Model: z-llm-7b-quantum\x1b[0m` }
-      }
-      if (args[0] === 'fix' && args.length > 1) {
-        const issue = args.slice(1).join(' ')
-        return { output: `\x1b[1;36m[Z-AI] Diagnosing issue: ${issue}\x1b[0m
-
-\x1b[1;33mRoot Cause Analysis:\x1b[0m
-The AI has identified potential causes and solutions:
-
-\x1b[32mSolution 1 (Recommended):\x1b[0m
-  Run: zsec harden
-  This applies security hardening and patches known vulnerabilities.
-
-\x1b[32mSolution 2:\x1b[0m
-  Run: zupdate
-  This updates all packages to their latest secure versions.
-
-\x1b[32mSolution 3:\x1b[0m
-  Run: zservice restart <service-name>
-  Restart the affected service with AI-optimized scheduling.
-
-\x1b[33mAI Confidence: 97.2% | Auto-fix available: zai autofix\x1b[0m` }
-      }
-      if (args[0] === 'optimize') {
-        return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║              \x1b[1;33mZ-AI Performance Optimization Report\x1b[1;36m                      ║\x1b[0m
-\x1b[1;36m╠════════════════════════════════════════════════════════════════╣\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;32m1. Memory Optimization\x1b[0m                                          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Current: 8.2 GB / 16 GB (51%)                             \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Suggestion: Enable memory deduplication (saves 30%)          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Command: sysctl -w vm.z_dedup=1                             \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;32m2. CPU Optimization\x1b[0m                                             \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Current: AI Scheduler active (40% faster than CFS)            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Suggestion: Enable real-time priority for critical services    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Command: sysctl -w kernel.z_rt_priority=1                    \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;32m3. I/O Optimization\x1b[0m                                              \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Current: ZFS with zstd-19 compression                       \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Suggestion: Enable adaptive prefetch for sequential reads      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Command: zfs set prefetch=adaptive zroot                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[1;32m4. Network Optimization\x1b[0m                                          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Current: 10 Gbps with TCP optimization                      \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Suggestion: Enable BBR congestion control algorithm            \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m     Command: sysctl -w net.ipv4.tcp_congestion_control=bbr          \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m                                                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m║\x1b[0m  \x1b[32mOverall Score: 92/100 (Excellent)\x1b[0m                                \x1b[1;36m║\x1b[0m
-\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
-      }
-      if (args[0] === 'security') {
-        return { output: `\x1b[1;36m[Z-AI] Security Analysis\x1b[0m
-
-\x1b[1;33mCurrent Security Posture: PARANOID (Level 3)\x1b[0m
-
-\x1b[32mStrengths:\x1b[0m
-  + Zero-trust architecture at kernel level
-  + AI-powered threat detection (99.97% accuracy)
-  + Quantum-resistant encryption (AES-256-GCM + Kyber-1024)
-  + Full ASLR + Stack Protector + FORTIFY_SOURCE=2
-  + SECCOMP strict mode + AppArmor profiles
-
-\x1b[33mRecommendations:\x1b[0m
-  ! Patch ZVE-2026-002 (ZFS Buffer Overflow) - run zupdate
-  ! Patch ZVE-2026-004 (Firewall Rule Bypass) - run zupdate
-  ! Patch ZVE-2026-006 (Weak VPN Cipher) - run zpkg install z-vpn
-  ! Enable 2FA for root access - run zuser passwd root
-
-\x1b[32mSecurity Score: 98/100\x1b[0m` }
-      }
-      if (args[0] === 'diagnose') {
-        const m = getSystemMetrics()
-        return { output: `\x1b[1;36m[Z-AI] System Diagnostics\x1b[0m
-
-\x1b[33mRunning 15 diagnostic checks...\x1b[0m
-
-  [1/15]  Kernel integrity...... \x1b[32mPASS\x1b[0m (z-kernel-guard active)
-  [2/15]  Memory health......... \x1b[32mPASS\x1b[0m (${(m.memUsed/m.memTotal*100).toFixed(1)}% used)
-  [3/15]  CPU health............ \x1b[32mPASS\x1b[0m (${m.cpuUsage.toFixed(1)}% load)
-  [4/15]  Disk health........... \x1b[32mPASS\x1b[0m (ZFS scrub: 0 errors)
-  [5/15]  Firewall status....... \x1b[32mPASS\x1b[0m (247 rules active)
-  [6/15]  Network connectivity.. \x1b[32mPASS\x1b[0m (z0: up, 10 Gbps)
-  [7/15]  DNS resolution........ \x1b[32mPASS\x1b[0m (DoH + DNSSEC)
-  [8/15]  SSH service........... \x1b[32mPASS\x1b[0m (Ed25519 only)
-  [9/15]  Encryption............ \x1b[32mPASS\x1b[0m (AES-256-GCM + Kyber-1024)
-  [10/15] Process scheduler..... \x1b[32mPASS\x1b[0m (AI-optimized)
-  [11/15] Package signatures.... \x1b[32mPASS\x1b[0m (all verified)
-  [12/15] Service health........ \x1b[32mPASS\x1b[0m (15/15 running)
-  [13/15] Threat detection...... \x1b[32mPASS\x1b[0m (0 active threats)
-  [14/15] Backup status......... \x1b[32mPASS\x1b[0m (latest: today)
-  [15/15] AI model health....... \x1b[32mPASS\x1b[0m (z-threat-v3 loaded)
-
-\x1b[32mAll 15 checks passed. System is healthy.\x1b[0m` }
-      }
-      if (args[0] === 'learn') {
-        return { output: `\x1b[1;36m[Z-AI] Learning Capabilities\x1b[0m
-
-The Z-AI engine uses multiple learning models:
-
-  \x1b[33m1. Threat Detection Model (z-threat-v3)\x1b[0m
-     - Neural network: 7B parameters
-     - Training: 10M+ attack patterns
-     - Accuracy: 99.97%
-     - Update: Continuous learning from blocked threats
-
-  \x1b[33m2. Process Scheduling Model (z-sched-v2)\x1b[0m
-     - Reinforcement learning based
-     - Learns optimal scheduling from workload patterns
-     - 40% faster context switches than Linux CFS
-
-  \x1b[33m3. Anomaly Detection Model (z-anomaly-v1)\x1b[0m
-     - Unsupervised learning on system behavior
-     - Detects zero-day exploits in real-time
-     - Self-updating every 6 hours
-
-  \x1b[33m4. Filesystem Optimization Model (z-fs-opt-v1)\x1b[0m
-     - Predicts file access patterns
-     - Auto-tunes ZFS prefetch and caching
-     - 25% faster file access than default ZFS
-
-All models run locally with hardware-accelerated inference.
-No data leaves the system - privacy by design.` }
-      }
-      return { output: `\x1b[33mUsage: zai [ask|fix|optimize|security|diagnose|learn] [args]\x1b[0m` }
-    }
-
-    // ═══════════════════════════════
-    // SYSTEM TOOLS
-    // ═══════════════════════════════
-
-    case 'zauth': {
-      return { output: `\x1b[1;36mZ-Auth - Privilege Escalation\x1b[0m
-────────────────────────────────────────────────────────
-\x1b[33mMulti-factor authentication required:\x1b[0m
-  1. Password authentication
-  2. Ed25519 key verification
-  3. AI behavior analysis
-
-\x1b[32mZero-trust: Every privileged operation requires re-authentication.\x1b[0m` }
-    }
-
-    case 'zenv': {
-      return { output: `\x1b[1;36mZ-OS Environment Configuration\x1b[0m
-────────────────────────────────────────────────────────
-  Desktop:    Z-Desktop 3.0 Quantum
-  Shell:      zsh 5.9 (Z-OS enhanced)
-  Editor:     nano/vim (Z-Code available in browser)
-  Theme:      Quantum Dark (customizable)
-  Language:   en_US.UTF-8
-  Terminal:   xterm-256color
-
-\x1b[33mZ-OS Exclusive Features:\x1b[0m
-  + AI-powered tab completion
-  + Natural language command suggestions
-  + Auto-alias creation based on usage patterns
-  + Quantum-encrypted session management
-  + Self-healing command history` }
-    }
-
-    case 'zmotd': {
-      return { output: `\x1b[1;36m╔════════════════════════════════════════════════════════════════╗\x1b[0m
-\x1b[1;36m║                                                                ║\x1b[0m
-\x1b[1;36m║   \x1b[1;33m  ███████╗███████╗ ██████╗ ██████╗ ███████╗\x1b[1;36m                    ║\x1b[0m
-\x1b[1;36m║   \x1b[1;33m  ╚══███╔╝██╔════╝██╔═══██╗██╔══██╗██╔════╝\x1b[1;36m                    ║\x1b[0m
-\x1b[1;36m║   \x1b[1;33m    ███╔╝ █████╗  ██║   ██║██████╔╝███████╗\x1b[1;36m                    ║\x1b[0m
-\x1b[1;36m║   \x1b[1;33m   ███╔╝  ██╔══╝  ██║   ██║██╔═══╝ ╚════██║\x1b[1;36m                    ║\x1b[0m
-\x1b[1;36m║   \x1b[1;33m  ███████╗███████╗╚██████╔╝██║     ███████║\x1b[1;36m                    ║\x1b[0m
-\x1b[1;36m║   \x1b[1;33m  ╚══════╝╚══════╝ ╚═════╝ ╚═╝     ╚══════╝\x1b[1;36m                    ║\x1b[0m
-\x1b[1;36m║                                                                ║\x1b[0m
-\x1b[1;36m║   \x1b[37mZ-OS 3.0 Quantum - The Operating System That Surpasses Linux\x1b[1;36m  ║\x1b[0m
-\x1b[1;36m║                                                                ║\x1b[0m
-\x1b[1;36m║   \x1b[36mKernel:\x1b[0m 6.2.0-z-quantum    \x1b[36mSecurity:\x1b[0m PARANOID                 ║\x1b[0m
-\x1b[1;36m║   \x1b[36mUptime:\x1b[0m ${formatUptime(getSystemMetrics().uptime).padEnd(18)}\x1b[36mAI Model:\x1b[0m z-threat-v3               ║\x1b[0m
-\x1b[1;36m║   \x1b[36mCPU:\x1b[0m    Z-Quantum 4C@4.2GHz  \x1b[36mRAM:\x1b[0m     16 GB DDR5                ║\x1b[0m
-\x1b[1;36m║   \x1b[36mDisk:\x1b[0m   64G NVMe (ZFS)      \x1b[36mNet:\x1b[0m     10 Gbps                    ║\x1b[0m
-\x1b[1;36m║                                                                ║\x1b[0m
-\x1b[1;36m║   Type \x1b[33m'help'\x1b[0m for commands or \x1b[33m'ztour'\x1b[0m for a guided tour            ║\x1b[0m
-\x1b[1;36m║                                                                ║\x1b[0m
-\x1b[1;36m╚════════════════════════════════════════════════════════════════╝\x1b[0m` }
+      if (!args[0]) return { output: `COMMAND    PID   USER   FD   TYPE   DEVICE   SIZE/OFF   NAME
+bash       142   ubuntu  0r   CHR    0,6      0t0        /dev/tty0
+bash       142   ubuntu  1w   CHR    0,6      0t0        /dev/tty0
+bash       142   ubuntu  2w   CHR    0,6      0t0        /dev/tty0
+nginx      890   www-data 4u  IPv4   12643    0t0        TCP *:80
+sshd       567   root   3u   IPv4   12892    0t0        TCP *:22` }
+      return { output: `\x1b[33mUse lsof without arguments for a full list.\x1b[0m` }
     }
 
     case 'sysctl': {
       if (args.length === 0) {
-        return { output: `\x1b[1;36mZ-OS Sysctl Configuration\x1b[0m
-kernel.z_security_level = 3 (PARANOID)
-kernel.z_ai_scheduling = 1 (enabled)
-kernel.z_quantum_crypto = 1 (enabled)
-kernel.z_live_patch = 1 (enabled)
-kernel.z_dedup = 1 (enabled)
-kernel.aslr = 2 (full randomization)
-kernel.kptr_restrict = 2
-kernel.dmesg_restrict = 1
-kernel.unprivileged_bpf_disabled = 1
+        return { output: `kernel.osrelease = 6.8.0-45-generic
+kernel.ostype = Linux
+kernel.hostname = ubuntu-server
+kernel.version = #45-Ubuntu SMP x86_64
+kernel.pid_max = 4194304
 net.ipv4.ip_forward = 0
 net.ipv4.tcp_syncookies = 1
 net.ipv4.icmp_echo_ignore_all = 0
-net.core.somaxconn = 65535
+net.core.somaxconn = 4096
 vm.swappiness = 10
-vm.overcommit_memory = 0` }
+vm.overcommit_memory = 0
+fs.file-max = 9223372036854775807` }
       }
       if (args[0] === '-w' && args[1]) {
-        return { output: `\x1b[32m${args[1]}\x1b[0m` }
+        return { output: `${args[1]}` }
       }
       return { output: `\x1b[33mUsage: sysctl [-w] [variable=value]\x1b[0m` }
     }
 
+    // ═══════════════════════════════
+    // DOCKER
+    // ═══════════════════════════════
+
+    case 'docker': {
+      if (args[0] === 'ps' || args.length === 0) {
+        return { output: `CONTAINER ID   IMAGE          STATUS      PORTS                  NAMES
+a1b2c3d4e5f6   nginx:latest   Up 2h        0.0.0.0:80->80/tcp     web-server
+f6e5d4c3b2a1   redis:7        Up 2h        0.0.0.0:6379->6379     cache
+1a2b3c4d5e6f   node:22        Up 45m       0.0.0.0:3000->3000     app-server` }
+      }
+      if (args[0] === 'images') {
+        return { output: `REPOSITORY   TAG       SIZE
+nginx        latest    187MB
+redis        7         138MB
+node         22        1.1GB
+python       3.12      1.0GB
+postgres     16        432MB` }
+      }
+      if (args[0] === 'run' && args[1]) {
+        return { output: `\x1b[32mUnable to find image '${args[1]}' locally\x1b[0m
+latest: Pulling from library/${args[1]}
+a480a496ba95: Pull complete
+...
+Digest: sha256:a1b2c3d4e5f6
+Status: Downloaded newer image
+Container started on port ${8000 + Math.floor(Math.random() * 1000)}` }
+      }
+      if (args[0] === 'build' && args[1]) {
+        return { output: `\x1b[32mBuilding image '${args[1]}'...\x1b[0m
+Step 1/5 : FROM ubuntu:24.04
+Step 2/5 : COPY . /app
+Step 3/5 : RUN apt-get install -y deps
+Step 4/5 : EXPOSE 8080
+Step 5/5 : CMD ["./start"]
+\x1b[32mSuccessfully built image '${args[1]}'\x1b[0m` }
+      }
+      return { output: `\x1b[33mUsage: docker [ps|images|run|build] [args]\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // GIT
+    // ═══════════════════════════════
+
+    case 'git': {
+      if (args[0] === 'status' || args.length === 0) {
+        return { output: `On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  \x1b[31mmodified:   src/app.ts\x1b[0m
+  \x1b[31mmodified:   config/nginx.conf\x1b[0m
+
+Untracked files:
+  \x1b[31mnew-file:  src/utils.ts\x1b[0m
+  \x1b[31mnew-file:  README.md\x1b[0m` }
+      }
+      if (args[0] === 'log') {
+        const commits = [
+          { hash: 'a1b2c3d', msg: 'feat: add user authentication module', time: '2 hours ago' },
+          { hash: 'e4f5g6h', msg: 'fix: nginx config for SSL redirect', time: '5 hours ago' },
+          { hash: 'i7j8k9l', msg: 'feat: add Docker compose setup', time: '1 day ago' },
+          { hash: 'm0n1o2p', msg: 'docs: update README with setup instructions', time: '2 days ago' },
+          { hash: 'q3r4s5t', msg: 'chore: update dependencies', time: '3 days ago' },
+        ]
+        return { output: commits.map(c => `\x1b[33m${c.hash}\x1b[0m ${c.msg} \x1b[90m(${c.time})\x1b[0m`).join('\n') }
+      }
+      if (args[0] === 'branch') {
+        return { output: `* \x1b[32mmain\x1b[0m\n  develop\n  feature/auth\n  feature/docker-setup\n  hotfix/ssl-config` }
+      }
+      if (args[0] === 'diff') {
+        return { output: `\x1b[33mdiff --git a/src/app.ts b/src/app.ts\x1b[0m
+index a1b2c3d..e4f5g6h 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -42,6 +42,8 @@
+   const auth = new AuthModule();
++  auth.enableJWT();
++  auth.setTokenExpiry('24h');` }
+      }
+      return { output: `\x1b[33musage: git [status|log|branch|diff] [args]\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // USER MANAGEMENT
+    // ═══════════════════════════════
+
+    case 'useradd': {
+      if (!args[0]) return { output: '\x1b[31museradd: missing username\x1b[0m' }
+      return { output: `\x1b[32mUser '${args[0]}' created (UID: ${1001 + Math.floor(Math.random() * 100)})\x1b[0m` }
+    }
+
+    case 'usermod': {
+      if (!args[0]) return { output: '\x1b[31musermod: missing arguments\x1b[0m' }
+      return { output: `\x1b[32mUser modified.\x1b[0m` }
+    }
+
+    case 'passwd': {
+      if (!args[0]) return { output: `\x1b[33mChanging password for ${session.username}.\nNew password: \x1b[0m` }
+      return { output: `\x1b[32mPassword for '${args[0]}' updated.\x1b[0m` }
+    }
+
+    // ═══════════════════════════════
+    // OTHER COMMANDS
+    // ═══════════════════════════════
+
+    case 'watch': {
+      if (!args[0]) return { output: '\x1b[31mwatch: missing command\x1b[0m' }
+      const result = executeSingleCommand(args[0], args.slice(1), session, '')
+      return { output: `Every 2.0s: ${args.join(' ')}\n${new Date().toLocaleString()}\n\n${result.output}` }
+    }
+
+    case 'sleep':
+      return { output: `` }
+
+    case 'env': {
+      return { output: Object.entries(session.env).map(([k, v]) => `${k}=${v}`).join('\n') }
+    }
+
+    case 'export': {
+      if (args.length === 0) return { output: Object.entries(session.env).map(([k, v]) => `declare -x ${k}="${v}"`).join('\n') }
+      const expr = args.join(' ')
+      const eqIdx = expr.indexOf('=')
+      if (eqIdx > 0) {
+        const key = expr.slice(0, eqIdx).trim()
+        const val = expr.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '')
+        session.env[key] = val
+        return { output: '' }
+      }
+      return { output: '' }
+    }
+
+    case 'alias': {
+      if (args.length === 0) {
+        return { output: Object.entries(session.aliases).map(([k, v]) => `alias ${k}='${v}'`).join('\n') || 'No aliases defined.' }
+      }
+      const expr = args.join(' ')
+      const eqIdx = expr.indexOf('=')
+      if (eqIdx > 0) {
+        const key = expr.slice(0, eqIdx).trim()
+        const val = expr.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '')
+        session.aliases[key] = val
+        return { output: '' }
+      }
+      return { output: `\x1b[33mUsage: alias name='command'\x1b[0m` }
+    }
+
     default:
       if (cmd === '') return { output: '' }
-      return { output: `\x1b[31mzsh: command not found: ${cmd}\x1b[0m
-\x1b[33mHint: Type 'help' for available commands or 'ztour' for an interactive tour.\x1b[0m` }
+      return { output: `\x1b[31mbash: ${cmd}: command not found\x1b[0m` }
   }
 }
 
 function generateProcesses(): Process[] {
   const base: Process[] = [
-    { pid: 1, name: 'z-init', user: 'root', cpu: 0.0, memory: 0.1, status: 'running', priority: 0, threads: 1, startTime: 0, cmd: '/sbin/z-init' },
-    { pid: 2, name: 'z-kernel-guard', user: 'root', cpu: 0.3, memory: 0.5, status: 'running', priority: -2, threads: 4, startTime: 0, cmd: '/sbin/z-kernel-guard' },
-    { pid: 3, name: 'z-firewall', user: 'root', cpu: 0.2, memory: 0.8, status: 'running', priority: -2, threads: 8, startTime: 0, cmd: '/sbin/z-firewall --ai-mode' },
-    { pid: 4, name: 'z-netmanager', user: 'root', cpu: 0.1, memory: 0.6, status: 'running', priority: 0, threads: 4, startTime: 0, cmd: '/sbin/z-netmanager' },
-    { pid: 5, name: 'z-quantum-crypto', user: 'root', cpu: 0.1, memory: 1.0, status: 'running', priority: -2, threads: 2, startTime: 0, cmd: '/sbin/z-quantum-crypto' },
-    { pid: 6, name: 'z-ai-detect', user: 'root', cpu: 2.5, memory: 2.5, status: 'running', priority: -1, threads: 12, startTime: 0, cmd: '/sbin/z-ai-detect --model=z-threat-v3' },
-    { pid: 7, name: 'z-auditd', user: 'root', cpu: 0.1, memory: 0.3, status: 'running', priority: 0, threads: 2, startTime: 0, cmd: '/sbin/z-auditd --level=paranoid' },
-    { pid: 8, name: 'z-fs-monitor', user: 'root', cpu: 0.2, memory: 0.4, status: 'running', priority: 0, threads: 2, startTime: 0, cmd: '/sbin/z-fs-monitor' },
-    { pid: 9, name: 'z-scheduler', user: 'root', cpu: 0.4, memory: 0.2, status: 'running', priority: -20, threads: 4, startTime: 0, cmd: '/sbin/z-scheduler --quantum' },
-    { pid: 10, name: 'nginx', user: 'www-data', cpu: 0.3, memory: 0.8, status: 'running', priority: 0, threads: 4, startTime: 0, cmd: 'nginx: worker process' },
-    { pid: 11, name: 'sshd', user: 'root', cpu: 0.0, memory: 0.3, status: 'running', priority: 0, threads: 1, startTime: 0, cmd: '/usr/sbin/sshd -D' },
-    { pid: 12, name: 'z-packagekit', user: 'root', cpu: 0.0, memory: 0.2, status: 'sleeping', priority: 0, threads: 2, startTime: 0, cmd: '/usr/lib/z-packagekit' },
-    { pid: 142, name: 'zsh', user: 'z-user', cpu: 0.0, memory: 0.4, status: 'running', priority: 0, threads: 1, startTime: Math.floor(Date.now()/1000) - 300, cmd: '-zsh' },
+    { pid: 1, name: 'systemd', user: 'root', cpu: 0.0, memory: 0.1, status: 'running', priority: 0, threads: 1, startTime: 0, cmd: '/sbin/init' },
+    { pid: 123, name: 'dbus-daemon', user: 'root', cpu: 0.0, memory: 0.2, status: 'running', priority: 0, threads: 1, startTime: 0, cmd: 'dbus-daemon --system' },
+    { pid: 210, name: 'rsyslogd', user: 'syslog', cpu: 0.0, memory: 0.2, status: 'running', priority: 0, threads: 4, startTime: 0, cmd: '/usr/sbin/rsyslogd -n' },
+    { pid: 234, name: 'ufw', user: 'root', cpu: 0.1, memory: 0.3, status: 'running', priority: 0, threads: 2, startTime: 0, cmd: '/usr/sbin/ufw' },
+    { pid: 345, name: 'cron', user: 'root', cpu: 0.0, memory: 0.1, status: 'running', priority: 0, threads: 1, startTime: 0, cmd: '/usr/sbin/cron -f' },
+    { pid: 432, name: 'accounts-daemon', user: 'root', cpu: 0.0, memory: 0.3, status: 'running', priority: 0, threads: 3, startTime: 0, cmd: '/usr/lib/accountsservice/accounts-daemon' },
+    { pid: 456, name: 'NetworkManager', user: 'root', cpu: 0.1, memory: 0.6, status: 'running', priority: 0, threads: 4, startTime: 0, cmd: '/usr/sbin/NetworkManager' },
+    { pid: 567, name: 'sshd', user: 'root', cpu: 0.0, memory: 0.3, status: 'running', priority: 0, threads: 1, startTime: 0, cmd: 'sshd: /usr/sbin/sshd -D' },
+    { pid: 678, name: 'snapd', user: 'root', cpu: 0.2, memory: 1.2, status: 'running', priority: 0, threads: 12, startTime: 0, cmd: '/usr/lib/snapd/snapd' },
+    { pid: 890, name: 'nginx', user: 'www-data', cpu: 0.3, memory: 0.8, status: 'running', priority: 0, threads: 4, startTime: 0, cmd: 'nginx: worker process' },
+    { pid: 142, name: 'bash', user: 'ubuntu', cpu: 0.0, memory: 0.4, status: 'running', priority: 0, threads: 1, startTime: Math.floor(Date.now()/1000) - 300, cmd: '-bash' },
   ]
   return base
 }
@@ -2533,7 +1981,7 @@ function generateProcesses(): Process[] {
 // ═══════════════════════════════════════════
 
 io.on('connection', (socket) => {
-  console.log(`[Z-OS] Connection: ${socket.id}`)
+  console.log(`[Ubuntu] Connection: ${socket.id}`)
   totalConnections++
   let session: Session | null = null
 
@@ -2548,32 +1996,31 @@ io.on('connection', (socket) => {
       id: uuidv4(),
       email,
       token,
-      hostname: 'z-mainframe',
-      username: 'z-user',
-      cwd: '/home/z-user',
+      hostname: 'ubuntu-server',
+      username: 'ubuntu',
+      cwd: '/home/ubuntu',
       connectedAt: new Date(),
       pidCounter: 200,
       env: {
-        PATH: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-        HOME: '/home/z-user',
-        USER: 'z-user',
-        SHELL: '/bin/zsh',
+        PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        HOME: '/home/ubuntu',
+        USER: 'ubuntu',
+        SHELL: '/bin/bash',
         TERM: 'xterm-256color',
         LANG: 'en_US.UTF-8',
-        Z_OS_VERSION: '3.0.0-quantum',
       },
       history: [],
       aliases: {
         ll: 'ls -lah --color=auto',
         la: 'ls -A --color=auto',
         cls: 'clear',
-        update: 'zpkg update',
-        scan: 'zsec scan',
-        mon: 'zmon --realtime',
+        update: 'sudo apt update && sudo apt upgrade',
+        'cd..': 'cd ..',
       },
       variables: {},
       runningProcesses: generateProcesses(),
       lastActivity: new Date(),
+      isRoot: false,
     }
 
     sessions.set(socket.id, session)
@@ -2583,23 +2030,22 @@ io.on('connection', (socket) => {
       hostname: session.hostname,
       username: session.username,
       plan: {
-        name: 'Quantum',
-        cpu: 'Z-Quantum vCPU (4 cores) @ 4.2GHz',
-        ram: '16 GB DDR5',
-        storage: '64 GB NVMe SSD (ZFS)',
-        bandwidth: '10 Gbps',
-        os: 'Z-OS 3.0 Quantum',
-        region: 'Quantum-Region-1',
-        security: 'PARANOID',
+        name: 'Ubuntu Server',
+        cpu: 'Intel Xeon (4 cores) @ 2.80GHz',
+        ram: '16 GB DDR4',
+        storage: '64 GB SSD (ext4)',
+        bandwidth: '1 Gbps',
+        os: 'Ubuntu 24.04 LTS',
+        region: 'us-east-1',
+        security: 'Standard',
       },
       services: systemServices,
       network: networkInterfaces,
       firewall: firewallRules,
-      vulnerabilities: vulnerabilityDB,
       packages: packageDB,
     })
 
-    console.log(`[Z-OS] Authenticated: ${email} (session: ${session.id.slice(0,8)})`)
+    console.log(`[Ubuntu] Authenticated: ${email} (session: ${session.id.slice(0,8)})`)
   })
 
   socket.on('command', (data: { command: string }) => {
@@ -2627,17 +2073,15 @@ io.on('connection', (socket) => {
     if (!session) return
     const allCmds = ['help', 'ls', 'cd', 'pwd', 'cat', 'echo', 'mkdir', 'touch', 'rm', 'cp', 'mv',
       'find', 'grep', 'chmod', 'chown', 'chgrp', 'whoami', 'hostname', 'uname', 'date', 'uptime', 'free',
-      'df', 'ps', 'top', 'neofetch', 'zsysinfo', 'zsec', 'zfirewall', 'znet', 'zpkg', 'zservice',
-      'zps', 'ztour', 'zbenchmark', 'zhistory', 'alias', 'export', 'env', 'tree', 'head', 'tail',
+      'df', 'ps', 'top', 'neofetch', 'apt', 'systemctl', 'ufw', 'ip', 'ss', 'dpkg',
+      'alias', 'export', 'env', 'tree', 'head', 'tail',
       'wc', 'ping', 'clear', 'exit', 'history', 'id', 'which', 'man', 'sudo',
       'stat', 'file', 'du', 'ln', 'diff', 'sort', 'uniq', 'sed', 'awk', 'tee',
       'gzip', 'gunzip', 'xz', 'unxz', 'compress', 'decompress',
-      'md5sum', 'sha256sum', 'sha512sum', 'zrun', 'zcompile', 'zdebug',
-      'zdb', 'zdocker', 'docker', 'zgit', 'git', 'zcron', 'zlog',
-      'zuser', 'useradd', 'usermod', 'zbackup', 'zperf', 'zfs',
-      'zupdate', 'watch', 'sleep', 'wget', 'curl', 'ssh', 'scp',
-      'kill', 'killall', 'reboot', 'shutdown', 'dmesg', 'strace', 'ztrace',
-      'lsof', 'sysctl', 'zai', 'zauth', 'zenv', 'zmotd',
+      'md5sum', 'sha256sum', 'sha512sum',
+      'docker', 'git', 'curl', 'wget', 'ssh', 'scp',
+      'kill', 'killall', 'reboot', 'shutdown', 'dmesg', 'lsof', 'sysctl',
+      'watch', 'sleep', 'useradd', 'usermod', 'passwd', 'startx',
       ...Object.keys(session.aliases)]
     const input = data.input.trim().toLowerCase()
     const matches = allCmds.filter(c => c.startsWith(input))
@@ -2655,12 +2099,12 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     if (session) {
       sessions.delete(socket.id)
-      console.log(`[Z-OS] Disconnected: ${session.email}`)
+      console.log(`[Ubuntu] Disconnected: ${session.email}`)
     }
   })
 
   socket.on('error', (error) => {
-    console.error(`[Z-OS] Socket error (${socket.id}):`, error)
+    console.error(`[Ubuntu] Socket error (${socket.id}):`, error)
   })
 })
 
@@ -2671,18 +2115,7 @@ setInterval(() => {
 
 const PORT = 3003
 httpServer.listen(PORT, () => {
-  console.log(`[Z-OS] Kernel running on port ${PORT}`)
-  console.log(`[Z-OS] Version 3.0.0-quantum`)
-  console.log(`[Z-OS] AI modules loaded`)
-  console.log(`[Z-OS] Security level: PARANOID`)
-})
-
-process.on('SIGTERM', () => {
-  console.log('[Z-OS] SIGTERM received, shutting down...')
-  httpServer.close(() => process.exit(0))
-})
-
-process.on('SIGINT', () => {
-  console.log('[Z-OS] SIGINT received, shutting down...')
-  httpServer.close(() => process.exit(0))
+  console.log(`[Ubuntu] Server running on port ${PORT}`)
+  console.log(`[Ubuntu] Ubuntu 24.04 LTS (Noble Numbat)`)
+  console.log(`[Ubuntu] Kernel 6.8.0-45-generic`)
 })
